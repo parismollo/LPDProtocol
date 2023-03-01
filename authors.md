@@ -1,5 +1,4 @@
-## Project Slash Authors
-
+## Project Authors
 
 | Nom         | Prenom      | Numéro étu | pseudo   | Contact                               |
 | ----------- | ----------- | ---------  | -------  |---------------------------------------|
