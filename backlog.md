@@ -1,0 +1,12 @@
+- [ ] Bug pour écrire dans file users.data (e.g. 9 -> 10 ou 99 -> 100) voir options.
+- [ ] return id to client
+- [ ] client doit savoir son id - doit retenir son id.
+- [ ] faire serveur qui accepte ipv6 et ipv4
+- [ ] makefile
+- [ ] enlever # du pseudo
+- [x] query client regler les bits
+- [x] send error
+- [x] faire recv pour inscription
+- [x] tricks pour reset port
+- [x] cote serveur: generate id
+- [x] store id in file

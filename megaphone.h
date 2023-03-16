@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <time.h>
+#include <fcntl.h>
 
 // STRUCTURES
 typedef struct {

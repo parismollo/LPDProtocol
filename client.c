@@ -1,41 +1,41 @@
-
 #include "megaphone.h"
 
 #define SIZE_MESS 1024
-
-#define IP_SERVER "fdc7:9dd5:2c66:be86:4849:43ff:fe49:79bf"
+// #define IP_SERVER "fdc7:9dd5:2c66:be86:4849:43ff:fe49:79bf"
+#define IP_SERVER "::1"
 #define PORT 7777
 
-int send_error() {
-    return 1;
+int send_error(int sock, char* msg) {
+    close(sock);
+    perror(msg);
+    exit(1);
 }
 
-int query(int server_sock, client_msg* msg) {
-    char buffer[2];
+int query(int sock, client_msg* msg) {
 
-    buffer[0] = (msg->CODEREQ << 3) | (msg->ID >> 8);
-    buffer[1] = msg->ID & 0xFF;
+    msg->ID &= 0x07FF; // On garde que les 11 premiers bits 
+    msg->CODEREQ &= 0x001F; // On garde que les 5 premiers bits
 
-    send(server_sock, buffer, sizeof(buffer), 0);
-    // Vérifier erreur.
-    
+    // Combine le codereq (5 bits de poids faible) avec l'ID (11 bits restants)
+    uint16_t res = ((uint16_t)msg->CODEREQ) | (msg->ID << 5);
+    res = htons(res); 
+    if (send(sock, &res, sizeof(res), 0) < 0) send_error(sock, "send failed"); 
+
     u_int16_t tmp = htons(msg->NUMFIL);
-    send(server_sock, &tmp, sizeof(u_int16_t), 0);
+    if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0) send_error(sock, "send failed"); 
 
     tmp = htons(msg->NB);
-    send(server_sock, &tmp, sizeof(u_int16_t), 0);
-
-    send(server_sock, &msg->DATALEN, sizeof(u_int8_t), 0);
-
-    send(server_sock, msg->DATA, msg->DATALEN, 0);
+    if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0) send_error(sock, "send failed");
+    if (send(sock, &msg->DATALEN, sizeof(u_int8_t), 0) < 0) send_error(sock, "send failed");
+    if (send(sock, msg->DATA, msg->DATALEN, 0) < 0) send_error(sock, "send failed");
 
     return 0;
 }
 
-int query_subscription(int server_sock, char* pseudo) {
+int query_subscription(int sock, char* pseudo) {
     uint16_t a = htons(1);
 
-    int ecrit = send(server_sock, &a, sizeof(uint16_t), 0);
+    int ecrit = send(sock, &a, sizeof(uint16_t), 0);
     printf("nombre d'octets envoyés: %d\n", ecrit);
 
     char buffer[10];
@@ -43,15 +43,8 @@ int query_subscription(int server_sock, char* pseudo) {
     memset(buffer, '#', sizeof(buffer));
     memmove(buffer, pseudo, strlen(pseudo));
 
-    ecrit = send(server_sock, buffer, 10, 0);
-    if(ecrit <= 0){
-        perror("erreur ecriture");
-        close(server_sock);
-        exit(3);
-    }
-
-    printf("nombre d'octets envoyés: %d\n", ecrit);
-    
+    if (send(sock, buffer, 10, 0)< 0) send_error(sock, "send failed");
+    // printf("nombre d'octets envoyés: %d\n", ecrit);
     return 0;
 }
 
@@ -66,41 +59,28 @@ int main(int argc, char* argv[]) {
     adrso.sin6_port = htons(PORT); // Convertir le port en big-endian
     
     inet_pton(AF_INET6, IP_SERVER, &adrso.sin6_addr); // On écrit l'ip dans adrso.sin_addr
-    int r = connect(sock, (struct sockaddr *) &adrso, sizeof(adrso)); // 0 en cas de succès, -1 sinon
-
-    if(r < 0) {
-        perror("erreur connect");
-        close(sock);
-        exit(-1);
-    }
+    if (connect(sock, (struct sockaddr *) &adrso, sizeof(adrso)) < 0) send_error(sock, "connect failed"); // 0 en cas de succès, -1 sinon
     
     query_subscription(sock, "daniel");
 
     // RECEPTION MSG SERVEUR
-
     char bufrecv[SIZE_MESS+1];
     memset(bufrecv, 0, SIZE_MESS+1);
     
-    int recu = recv(sock, bufrecv, SIZE_MESS * sizeof(char), 0);
-    printf("Taille msg recu: %d\n", recu);
-    if (recu <= 0){
-      perror("erreur lecture");
-      close(sock);
-      exit(4);
-    }
+    int n = -1;
+    if ((n = recv(sock, bufrecv, SIZE_MESS * sizeof(char), 0)) < 0) send_error(sock, "recv failed");
+    printf("Taille msg recu: %d\n", n);
     
-    bufrecv[recu] = '\0';
+    bufrecv[n] = '\0';
 
     printf("MSG hexa: ");
     for(int i=0;i<6;i++) {
       printf("%4x ", bufrecv[i]);
     }
     puts("");
-
     printf("MSG string: %s\n", bufrecv);
 
     //*** fermeture de la socket ***
     close(sock);
-
     return EXIT_SUCCESS;
 }
