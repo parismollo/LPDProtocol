@@ -31,52 +31,56 @@ int send_error(int sockclient) {
   return 0;
 }
 
+void goto_last_line(int fd) {
+  if(fd < 0)
+    return;
+  lseek(fd, 0, SEEK_END);
+  lseek(fd, -1, SEEK_CUR);
+  char c;
+  // on lit le fichier jusqu'au \n ou sinon jusqu'au debut du fichier
+  while (lseek(fd, 0, SEEK_CUR) > 0) {
+      read(fd, &c, sizeof(char));
+      if (c == '\n')
+          break;
+      lseek(fd, -2, SEEK_CUR);
+  }
+}
+
 int recv_client_subscription(int sockclient, client_msg* cmsg) {
-  // recoit pseudo
   char pseudo[11];
   memset(pseudo, 0, sizeof(pseudo));
 
   int n = recv(sockclient, pseudo, 10, 0);
   if (n < 0) {send_error(sockclient);}
   pseudo[n] = '\0';
-  // printf("pseudo client: %s\n", pseudo);
-  // open users_database file
-  // read last id
-  // generate new id
-  // store new id and pseudo in users_databse
-  // close file
-  // send to client id
+
+  char buffer[128];
+  memset(buffer, 0, sizeof(buffer));
+
   int id = 0;
   int fd = open(DATABASE, O_RDWR | O_CREAT, 0666);
-  char buffer[128];
-  memset(buffer, 0, 128);
-  if(read(fd, buffer, 127) == 0) {
-    // Première inscription
-    buffer[0] = '1';
-    buffer[1] = '\n';
-    write(fd, buffer, strlen(buffer));
-  }
-  else {
-    char* pos = strchr(buffer, '\n');
-    if(pos == NULL) {
-      // TODO: handle error
-    }
-    *pos = '\0';
+
+  if(fd < 0)
+    return send_error(sockclient);
+
+  goto_last_line(fd);
+
+  read(fd, buffer, sizeof(buffer));
+
+  if(strlen(buffer) != 0)
     id = atoi(buffer);
-  }
   id++;
 
-  if(lseek(fd, 0, SEEK_SET) < 0)
-    printf("NON\n");
-  sprintf(buffer, "%d\n", id);
-  write(fd, buffer, strlen(buffer));
+  goto_last_line(fd);
 
-  if(lseek(fd, 0, SEEK_END) < 0)
-    printf("NON\n");
   sprintf(buffer, "%d %s\n", id, pseudo);
   write(fd, buffer, strlen(buffer));
-  
+
+  sprintf(buffer, "%d", id);
+  write(fd, buffer, strlen(buffer));
+
   close(fd);
+
   return 0;
 }   
 
