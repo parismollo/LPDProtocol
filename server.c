@@ -46,6 +46,14 @@ void goto_last_line(int fd) {
   }
 }
 
+void clear_pseudo(char * pseudo){
+    char* pos_hstg = strchr(pseudo, '#');
+    if(pos_hstg == NULL)
+      return;
+    size_t length_cleared = pos_hstg - pseudo;
+    pseudo[length_cleared] = '\0';
+}
+
 int recv_client_subscription(int sockclient, client_msg* cmsg) {
   char pseudo[11];
   memset(pseudo, 0, sizeof(pseudo));
@@ -73,6 +81,7 @@ int recv_client_subscription(int sockclient, client_msg* cmsg) {
 
   goto_last_line(fd);
 
+  clear_pseudo(pseudo);
   sprintf(buffer, "%d %s\n", id, pseudo);
   write(fd, buffer, strlen(buffer));
 
