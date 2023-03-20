@@ -2,7 +2,7 @@
 
 #define SIZE_MESS 100
 #define DATA_LEN 255
-#define DATABASE "users.data"
+#define DATABASE "server_users.data"
 
 void affiche_connexion(struct sockaddr_in6 adrclient){
   char adr_buf[INET6_ADDRSTRLEN];
@@ -12,9 +12,10 @@ void affiche_connexion(struct sockaddr_in6 adrclient){
   printf("adresse client : IP: %s port: %d\n", adr_buf, ntohs(adrclient.sin6_port));
 }
 
-int send_error(int sockclient) {
+int send_error(int sockclient, char* msg) {
   if(sockclient < 0)
     return 1;
+  fprintf(stderr, "%s\n", msg);
   // On cree une entete avec CODEREQ=31
   // send()...
   uint16_t a = htons(31);
@@ -29,6 +30,25 @@ int send_error(int sockclient) {
     exit(-1);
 
   return 0;
+}
+
+int query(int sock, client_msg* msg) {
+
+    msg->ID &= 0x07FF; // On garde que les 11 premiers bits 
+    msg->CODEREQ &= 0x001F; // On garde que les 5 premiers bits
+
+    // Combine le codereq (5 bits de poids faible) avec l'ID (11 bits restants)
+    uint16_t res = ((uint16_t)msg->CODEREQ) | (msg->ID << 5);
+    res = htons(res); 
+    if (send(sock, &res, sizeof(res), 0) < 0) send_error(sock, "send failed"); 
+
+    u_int16_t tmp = htons(msg->NUMFIL);
+    if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0) send_error(sock, "send failed"); 
+
+    tmp = htons(msg->NB);
+    if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0) send_error(sock, "send failed");
+  
+    return 0;
 }
 
 void goto_last_line(int fd) {
@@ -51,7 +71,7 @@ int recv_client_subscription(int sockclient, client_msg* cmsg) {
   memset(pseudo, 0, sizeof(pseudo));
 
   int n = recv(sockclient, pseudo, 10, 0);
-  if (n < 0) {send_error(sockclient);}
+  if (n < 0) {send_error(sockclient, "error recv");}
   pseudo[n] = '\0';
 
   char buffer[128];
@@ -61,7 +81,7 @@ int recv_client_subscription(int sockclient, client_msg* cmsg) {
   int fd = open(DATABASE, O_RDWR | O_CREAT, 0666);
 
   if(fd < 0)
-    return send_error(sockclient);
+    return send_error(sockclient, "error open database file");
 
   goto_last_line(fd);
 
@@ -80,6 +100,13 @@ int recv_client_subscription(int sockclient, client_msg* cmsg) {
   write(fd, buffer, strlen(buffer));
 
   close(fd);
+
+  // ON ENVOIE L ID A L UTILISATEUR
+  client_msg msg;
+  memset(&msg, 0, sizeof(msg));
+  msg.ID = id;
+  msg.CODEREQ = 1;
+  query(sockclient, &msg);
 
   return 0;
 }   
@@ -102,7 +129,7 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
   // + vérifier que ID dépasse pas 11bits ?
   printf("CODEREQ: %d ID: %d\n", cmsg->CODEREQ, cmsg->ID);
   if(cmsg->CODEREQ > 6) {
-    return send_error(sockclient);
+    return send_error(sockclient, "CODEREQ too large");
   }
   else if(cmsg->CODEREQ == 1) { // INSCRIPTION
     return recv_client_subscription(sockclient, cmsg);
@@ -118,7 +145,7 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
 
   recu = recv(sockclient, &res, sizeof(uint16_t), 0);
   if (recu <= 0){
-    return send_error(sockclient);
+    return send_error(sockclient, "error recv");
   }
   cmsg->NB = ntohs(res);
 
@@ -126,7 +153,7 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
 
   recu = recv(sockclient, &res, sizeof(uint8_t), 0);
   if (recu <= 0){
-    return send_error(sockclient);
+    return send_error(sockclient, "error recv");
   }
   cmsg->DATALEN = ntohs(res);
 
@@ -141,7 +168,7 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
 
   recu = recv(sockclient, cmsg->DATA, sizeof(char) * DATA_LEN, 0);
   if (recu != cmsg->DATALEN) {
-    return send_error(sockclient);
+    return send_error(sockclient, "error DATALEN");
   }
 
   return 0;

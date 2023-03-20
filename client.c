@@ -4,6 +4,7 @@
 // #define IP_SERVER "fdc7:9dd5:2c66:be86:4849:43ff:fe49:79bf"
 #define IP_SERVER "::1"
 #define PORT 7777
+#define CLIENT_ID_FILE "client_id.data"
 
 int send_error(int sock, char* msg) {
     close(sock);
@@ -43,8 +44,36 @@ int query_subscription(int sock, char* pseudo) {
     memset(buffer, '#', sizeof(buffer));
     memmove(buffer, pseudo, strlen(pseudo));
 
-    if (send(sock, buffer, 10, 0)< 0) send_error(sock, "send failed");
+    if(send(sock, buffer, 10, 0)< 0) send_error(sock, "send failed");
     // printf("nombre d'octets envoyés: %d\n", ecrit);
+    uint16_t res, id, codereq;
+    if(recv(sock, &res, sizeof(res), 0) < 0) {
+        fprintf(stderr, "error recv");
+        return 1;
+    }
+    res = ntohs(res);
+    codereq = (res & 0x001F); // On mask avec 111110000..
+    id = (res & 0xFFE0) >> 5;
+    
+    if(codereq != 1) {
+        fprintf(stderr, "error codereq != 1");
+        return 1;
+    }
+
+    int fd = open(CLIENT_ID_FILE, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if(fd < 0) {
+        perror("open file");
+        return 1;
+    }
+
+    sprintf(buffer, "%hd", id);
+    if(write(fd, buffer, strlen(buffer)) < 0) {
+        fprintf(stderr, "error write id in users_client file");
+        return 1;
+    }
+    
+    close(fd);
+
     return 0;
 }
 
