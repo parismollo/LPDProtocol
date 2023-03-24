@@ -6,6 +6,8 @@
 #define PORT 7777
 #define CLIENT_ID_FILE "client_id.data"
 
+int ID = 0;
+
 int send_error(int sock, char* msg) {
     close(sock);
     perror(msg);
@@ -31,6 +33,19 @@ int query(int sock, client_msg* msg) {
     if (send(sock, msg->DATA, msg->DATALEN, 0) < 0) send_error(sock, "send failed");
 
     return 0;
+}
+
+int send_ticket(int sock, int numfil, char* text) {
+    client_msg msg;
+    msg.CODEREQ = 2;
+    msg.ID = ID;
+    msg.NUMFIL = numfil;
+    msg.NB = 0;
+    msg.DATALEN = strlen(text);
+    msg.DATA = text;
+
+    // Check if query is okay
+    return query(sock, &msg);
 }
 
 int query_subscription(int sock, char* pseudo) {
