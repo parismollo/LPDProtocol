@@ -120,6 +120,50 @@ int recv_client_subscription(int sockclient, client_msg* cmsg) {
   return 0;
 }   
 
+int handle_ticket(client_msg* msg) {
+  // This function supposes that the msg has been validated
+  char buf[100];
+  sprintf(buf, "fil%d/fil%d.txt", msg->NUMFIL, msg->NUMFIL);
+  printf("%s\n",buf);
+  int fd, n;
+  fd = open(buf, O_WRONLY | O_APPEND | O_CREAT, 0666);
+  if (fd == -1) {
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "fil%d", msg->NUMFIL);
+    
+    if(mkdir(buf, 0777)==0) {
+      return handle_ticket(msg);
+    }
+    else {
+      perror("failed to create folder"); 
+      return -1;
+    }
+  }
+  else {
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, "ID: %d\n", msg->ID);
+    write(fd, buf, strlen(buf));
+
+    printf("DATA: %s\n", msg->DATA);
+    n = write(fd, msg->DATA, msg->DATALEN);
+    // printf("n: %d\n", n);
+    if (n < 1 || write(fd, "\n", 1) < 1) {
+      perror("failed to write");
+      return -1;
+    } 
+  }
+  return 0;
+}
+
+int validate_and_exec_msg(client_msg* msg) {
+  // This function validate and call the appropriate function according to the msg
+  // check if message has a valid structure, check if id exists or not, etc
+  // if codereq == ? then ...
+  // etc..
+  return handle_ticket(msg); //tmp
+}
+
+
 int recv_client_msg(int sockclient, client_msg* cmsg) {
   if (sockclient < 0)
     return 1;
@@ -164,7 +208,7 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
   if (recu <= 0){
     return send_error(sockclient, "error recv");
   }
-  cmsg->DATALEN = ntohs(res);
+  cmsg->DATALEN = res;
 
   // if... DATALEN...
 
@@ -176,12 +220,16 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
   memset(cmsg->DATA, 0, cmsg->DATALEN);
 
   recu = recv(sockclient, cmsg->DATA, sizeof(char) * DATA_LEN, 0);
+  // printf("recu: %d", recu);
+  // printf("datalen: %d", cmsg->DATALEN);
   if (recu != cmsg->DATALEN) {
     return send_error(sockclient, "error DATALEN");
   }
 
+  validate_and_exec_msg(cmsg);
   return 0;
 }
+
 
 int main(int argc, char** args) {
   if (argc < 2) {
@@ -233,10 +281,8 @@ int main(int argc, char** args) {
   
   client_msg msg;
   recv_client_msg(sockclient, &msg);
-
   //*** fermeture socket client ***
   close(sockclient);
-
   //*** fermeture socket serveur ***
   close(sock);
   

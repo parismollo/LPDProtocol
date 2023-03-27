@@ -6,7 +6,30 @@
 #define PORT 7777
 #define CLIENT_ID_FILE "client_id.data"
 
-int ID = 0;
+int ID = 0; // ID zero is not valid, valid id has to be > 0.
+
+
+int check_subscription() {
+    char buffer[SIZE_MESS];
+    memset(buffer, 0, sizeof(buffer));
+    
+    int fd = open(CLIENT_ID_FILE, O_RDONLY);
+    if (fd == -1) {
+        // Failed to find id
+        return 0;
+    }
+    int n;
+    if((n = read(fd, buffer, SIZE_MESS)) < 0) {
+        // Failed to find id
+        return 0;
+    }
+
+    buffer[n] = '\0';
+    ID = atoi(buffer);
+    if (ID == 0) {return 0;}
+    // ID found
+    return 1;
+}
 
 int send_error(int sock, char* msg) {
     close(sock);
@@ -105,7 +128,14 @@ int main(int argc, char* argv[]) {
     inet_pton(AF_INET6, IP_SERVER, &adrso.sin6_addr); // On écrit l'ip dans adrso.sin_addr
     if (connect(sock, (struct sockaddr *) &adrso, sizeof(adrso)) < 0) send_error(sock, "connect failed"); // 0 en cas de succès, -1 sinon
     
-    query_subscription(sock, "daniel");
+    if(!check_subscription()) {
+        printf("ID not found. Forcing inscription...\n");
+        query_subscription(sock, "mcflay");
+        close(sock);
+        return EXIT_FAILURE;
+    }
+
+    send_ticket(sock, 4, "DANIEL EST UN GROS NOOBAR - MCFLY & CARLITO");
 
     // RECEPTION MSG SERVEUR
     char bufrecv[SIZE_MESS+1];

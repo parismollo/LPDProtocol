@@ -1,9 +1,12 @@
-- [ ] return id to client
-- [ ] client doit savoir son id - doit retenir son id.
+- [ ] Ajouter tout teste de verification avant valider msg du client (si codereq ok, si id existe, etc...)
 - [ ] faire serveur qui accepte ipv6 et ipv4
-- [ ] makefile
-- [ ] enlever # du pseudo
 - [ ] verify write and read (handle error)
+- [x] Recevoir un billet (creation de fil si nécessaire, check id, bla bla)
+- [x] Client verifie si id existe et stocke dans une variable globale
+- [x] return id to client
+- [x] client doit savoir son id - doit retenir son id.
+- [x] makefile
+- [x] enlever # du pseudo
 - [x] Bug pour écrire dans file users.data (e.g. 9 -> 10 ou 99 -> 100) voir options.
 - [x] query client regler les bits
 - [x] send error

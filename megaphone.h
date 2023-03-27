@@ -10,6 +10,9 @@
 #include <unistd.h>
 #include <time.h>
 #include <fcntl.h>
+#include <sys/stat.h>
+#include <errno.h>
+
 
 // STRUCTURES
 typedef struct {
