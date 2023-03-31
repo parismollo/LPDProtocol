@@ -1,6 +1,15 @@
-- [ ] Ajouter tout teste de verification avant valider msg du client (si codereq ok, si id existe, etc...)
+**Leopold**:
+- [ ] Demander la liste des **n** derniers billets (**SERVEUR**)
+
+**Paris**:
+- [ ] Demander la liste des **n** derniers billets (**CLIENT**)
+
+**Daniel**:
+- [ ] Vérifier que le client fonctionne pour poster un billet sur le serveur de la prof
 - [ ] faire serveur qui accepte ipv6 et ipv4
+- [ ] Ajouter tout teste de verification avant valider msg du client (si codereq ok, si id existe, etc...)
 - [ ] verify write and read (handle error)
+
 - [x] Recevoir un billet (creation de fil si nécessaire, check id, bla bla)
 - [x] Client verifie si id existe et stocke dans une variable globale
 - [x] return id to client

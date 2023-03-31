@@ -155,6 +155,40 @@ int handle_ticket(client_msg* msg) {
   return 0;
 }
 
+char* get_fil_initiator(int fil) {
+  // Open fil
+  // get first pseudo ?
+}
+
+char** get_last_messages(int nb, int fil) {
+  // Open fil
+  // get nb last msg
+  // store them (char** array)
+}
+
+int list_tickets(client_msg* msg) {
+  // This function supposes that the msg has been validated
+  if(msg->NB <= 0) {
+    fprintf(stderr, "Bad Number");
+    return -1;
+  }
+  char buf[100];
+  sprintf(buf, "fil%d/fil%d.txt", msg->NUMFIL, msg->NUMFIL);
+  printf("%s\n",buf);
+
+  char* initator = get_fil_initiator(msg->NUMFIL);
+  if(initator == NULL) {
+    // LE FIL N EXISTE PAS
+    // send error...
+    return -1;
+  }
+
+  char** messages = get_last_messages(msg->NB, msg->NUMFIL);
+
+
+  return 0;
+}
+
 int validate_and_exec_msg(client_msg* msg) {
   // This function validate and call the appropriate function according to the msg
   // check if message has a valid structure, check if id exists or not, etc
@@ -281,6 +315,10 @@ int main(int argc, char** args) {
   
   client_msg msg;
   recv_client_msg(sockclient, &msg);
+
+  if(msg.DATA)
+    free(msg.DATA);
+
   //*** fermeture socket client ***
   close(sockclient);
   //*** fermeture socket serveur ***
