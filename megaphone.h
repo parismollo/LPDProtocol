@@ -21,4 +21,10 @@ typedef struct {
   char* DATA;
 } client_msg;
 
+typedef struct {
+  int ID;
+  char pseudo[11];
+  char text[256];
+}message;
+
 #endif

@@ -1,1 +1,5 @@
 board.excalidraw
+server
+client
+*.o
+*.swp

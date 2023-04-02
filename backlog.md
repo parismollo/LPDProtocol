@@ -1,3 +1,6 @@
+- [ ] Mettre le nombre de msg dans un fil au debut du fichier ?
+- [ ] Mettre le pseudo du createur au debut du fichier ou son ID ?
+
 **Leopold**:
 - [ ] Demander la liste des **n** derniers billets (**SERVEUR**)
 

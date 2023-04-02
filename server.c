@@ -155,15 +155,78 @@ int handle_ticket(client_msg* msg) {
   return 0;
 }
 
+int nb_fils() {
+  // 2 OPTIONS:
+  // 1. On vérifie tous les dossiers qui commence par "fil"
+  // 2. on maintient un fichier infos.txt qui contient plusieurs infos sur le
+  // serveur dont par exemple le nombre de fils en cours
+  // il suffit alors dans cette fonction de lire le chiffre dans le fichier
+  return 0;
+}
+
 char* get_fil_initiator(int fil) {
   // Open fil
   // get first pseudo ?
+  return NULL;
 }
 
-char** get_last_messages(int nb, int fil) {
+// Lit une ligne dans prendre le '\n'
+int readline(int fd, char* line, size_t buf_size) {
+  char c;
+  memset(line, 0, buf_size);
+  for(int i=0;i<buf_size;i++) {
+    if(read(fd, &c, 1) < 0)
+      return 1;
+    if(c == '\n')
+      return 0;
+    line[i] = c;
+  }
+  return 2; // Ligne trop grande
+}
+
+int get_last_messages(int nb, int fil, message* messages) {
   // Open fil
   // get nb last msg
   // store them (char** array)
+
+  char buf[100];
+  sprintf(buf, "fil%d/fil%d.txt", fil, fil);
+  printf("%s\n",buf);
+
+  char line[1024];
+
+  int fd = open(buf, O_RDONLY, 0666);
+  
+  long file_size = lseek(fd, 0, SEEK_END);
+    
+  long num_lines = 0, current_pos;
+  for (current_pos = file_size - 1; current_pos >= 0; current_pos--) {
+    lseek(fd, current_pos, SEEK_SET);
+    read(fd, buf, 1);
+    if(*buf == '\n')
+      num_lines++;
+    if(num_lines >= nb * 2)
+      break;
+  }
+
+  if(num_lines < nb * 2) {
+    fprintf(stderr, "il y a moins de %d msg\n", nb);
+    return -1;
+  }
+
+  for(int i=0;i<nb;i++) {
+    memset(&messages[i], 0, sizeof(message));
+    // On lit l'ID
+    readline(fd, line, 1024); // GESTION ERREURS
+    // Check if begins with "ID: "
+    messages[i].ID = atoi(line + 4); // strlen("ID: ") = 4
+    // On lit le message
+    readline(fd, line, 1024); // GESTION ERREURS
+    // Check if begins with "DATA: "
+    memmove(messages[i].text, line + 6, 255); // strlen("DATA: ") = 6
+  }
+
+  return 0;
 }
 
 int list_tickets(client_msg* msg) {
@@ -172,6 +235,15 @@ int list_tickets(client_msg* msg) {
     fprintf(stderr, "Bad Number");
     return -1;
   }
+
+  /*
+    1. Envoyer un premier billet selon les conditions du pdf
+  */
+
+  /*
+    2. Envoyer les N derniers messages du fil
+  */
+
   char buf[100];
   sprintf(buf, "fil%d/fil%d.txt", msg->NUMFIL, msg->NUMFIL);
   printf("%s\n",buf);
@@ -183,9 +255,15 @@ int list_tickets(client_msg* msg) {
     return -1;
   }
 
-  char** messages = get_last_messages(msg->NB, msg->NUMFIL);
+  message* messages = malloc(sizeof(message) * msg->NB);
+  if(messages == NULL) {
+    //send error
+    return -1;
+  }
 
+  get_last_messages(msg->NB, msg->NUMFIL, messages);
 
+  free(messages);
   return 0;
 }
 
@@ -266,6 +344,15 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
 
 
 int main(int argc, char** args) {
+
+  // int nb = 3;
+  // message* mess = malloc(sizeof(message) * nb);
+  // get_last_messages(nb, 1, mess);
+  // for(int i=0;i<10;i++)
+  //   printf("msg: %d %s\n", mess[i].ID, mess[i].text);
+  // free(mess);
+  // return 0;
+
   if (argc < 2) {
     fprintf(stderr, "Usage: %s <port>\n", args[0]);
     exit(1);
