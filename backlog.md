@@ -5,6 +5,7 @@
 - [ ] repondre au client après avoir poster un billet (regler cas f=0)
 - [ ] gérer reception des tickets **CLIENT**
 - [ ] gérer reception des abonnés fils
+- [ ] gérer bug segmentation false à l'inscription
 
 **Leopold**:
 - [ ] Demander la liste des **n** derniers billets (**SERVEUR**)
@@ -14,7 +15,7 @@
 
 **Daniel**:
 - [ ] Vérifier que le client fonctionne pour poster un billet sur le serveur de la prof
-- [ ] faire serveur qui accepte ipv6 et ipv4
+- [x] faire serveur qui accepte ipv6 et ipv4
 - [ ] Ajouter tout teste de verification avant valider msg du client (si codereq ok, si id existe, etc...)
 - [ ] verify write and read (handle error)
 

@@ -406,6 +406,13 @@ int main(int argc, char** args) {
   address_sock.sin6_family = AF_INET6;
   address_sock.sin6_port = htons(atoi(args[1]));
   address_sock.sin6_addr = in6addr_any;
+
+  // Pour avoir une socket polymorphe : 
+  int no = 0;
+  int ret = setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &no, sizeof(no));
+  if (ret < 0) {
+    fprintf(stderr, "échec de setsockopt() : (%d)\n", errno);
+  }
   
   int yes = 1;
   int r = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
