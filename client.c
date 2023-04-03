@@ -115,6 +115,29 @@ int query_subscription(int sock, char* pseudo) {
     return 0;
 }
 
+
+int get_tickets(int sock, int num_fil, int nombre_billets) {
+    client_msg msg;
+    msg.CODEREQ = 3;
+    msg.ID = ID;
+    msg.NUMFIL = num_fil;
+    msg.NB = nombre_billets;
+    msg.DATALEN = 0;
+    msg.DATA = "";
+    query(sock, &msg);
+}
+
+int abonner_au_fil(int sock, int num_fil) {
+    client_msg msg;
+    msg.CODEREQ = 4;
+    msg.ID = ID;
+    msg.NUMFIL = num_fil;
+    msg.NB = 0;
+    msg.DATALEN = 0;
+    msg.DATA = "";
+    query(sock, &msg);
+}
+
 int main(int argc, char* argv[]) {
 
     int sock = socket(PF_INET6, SOCK_STREAM, 0);
