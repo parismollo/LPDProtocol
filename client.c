@@ -41,7 +41,7 @@ int query(int sock, client_msg* msg) {
 
     msg->ID &= 0x07FF; // On garde que les 11 premiers bits 
     msg->CODEREQ &= 0x001F; // On garde que les 5 premiers bits
-
+    
     // Combine le codereq (5 bits de poids faible) avec l'ID (11 bits restants)
     uint16_t res = ((uint16_t)msg->CODEREQ) | (msg->ID << 5);
     res = htons(res); 
@@ -67,6 +67,7 @@ int send_ticket(int sock, int numfil, char* text) {
     msg.DATALEN = strlen(text);
     msg.DATA = text;
 
+    // printf("%d, %d, %d, %d, %d, %s\n", msg.CODEREQ, msg.ID, msg.NUMFIL, msg.NB, msg.DATALEN, msg.DATA);
     // Check if query is okay
     return query(sock, &msg);
 }
@@ -124,7 +125,7 @@ int get_tickets(int sock, int num_fil, int nombre_billets) {
     msg.NB = nombre_billets;
     msg.DATALEN = 0;
     msg.DATA = "";
-    query(sock, &msg);
+    return query(sock, &msg);
 }
 
 int abonner_au_fil(int sock, int num_fil) {
@@ -135,7 +136,7 @@ int abonner_au_fil(int sock, int num_fil) {
     msg.NB = 0;
     msg.DATALEN = 0;
     msg.DATA = "";
-    query(sock, &msg);
+    return query(sock, &msg);
 }
 
 int main(int argc, char* argv[]) {
@@ -153,18 +154,20 @@ int main(int argc, char* argv[]) {
     
     if(!check_subscription()) {
         printf("ID not found. Forcing inscription...\n");
-        query_subscription(sock, "mcflay");
+        query_subscription(sock, "daniel");
         close(sock);
         return EXIT_FAILURE;
     }
 
-    send_ticket(sock, 4, "DANIEL EST UN GROS NOOBAR - MCFLY & CARLITO");
+    // send_ticket(sock, 0, "bonjour a tous");
+    get_tickets(sock, 5, 5);
 
     // RECEPTION MSG SERVEUR
     char bufrecv[SIZE_MESS+1];
     memset(bufrecv, 0, SIZE_MESS+1);
     
     int n = -1;
+
     if ((n = recv(sock, bufrecv, SIZE_MESS * sizeof(char), 0)) < 0) send_error(sock, "recv failed");
     printf("Taille msg recu: %d\n", n);
     
@@ -172,7 +175,7 @@ int main(int argc, char* argv[]) {
 
     printf("MSG hexa: ");
     for(int i=0;i<6;i++) {
-      printf("%4x ", bufrecv[i]);
+        printf("%4x ", bufrecv[i]);
     }
     puts("");
     printf("MSG string: %s\n", bufrecv);

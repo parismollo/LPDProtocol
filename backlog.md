@@ -2,6 +2,9 @@
 - [ ] fonction nb_fils: compte tous les dossier commençant par fil
 - [ ] Fonction getInitator: renvoie le createur du fil (premier id)
 - [ ] fonction nb_msg_fil: Mettre le nombre de msg dans un fil a la fin du fichier ? Ou alors fonction qui ouvre le fichier et compte tous les msg
+- [ ] repondre au client après avoir poster un billet (regler cas f=0)
+- [ ] gérer reception des tickets **CLIENT**
+- [ ] gérer reception des abonnés fils
 
 **Leopold**:
 - [ ] Demander la liste des **n** derniers billets (**SERVEUR**)
