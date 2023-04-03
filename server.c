@@ -155,6 +155,32 @@ int handle_ticket(client_msg* msg) {
   return 0;
 }
 
+// Enregistre le pseudo dans la variable pseudo
+void get_pseudo(int id, char* pseudo) {
+  FILE* f = fopen(DATABASE, "r");
+  if(f == NULL)
+    return;
+    
+  char buf[1024];
+  char* ptr;
+  while(fgets(buf, 1024, f) != NULL) {
+    ptr = strtok(buf, " \n");
+    if(ptr == NULL)
+      break;
+    if(atoi(ptr) == id) {
+      ptr = strtok(NULL, " \n");
+      if(ptr == NULL)
+        break;
+      memset(pseudo, 0, 11);
+      int min = strlen(ptr);
+      if(min > 10)
+        min = 10;
+      memmove(pseudo, ptr, min);
+    }
+  }
+  fclose(f);
+}
+
 int nb_fils() {
   // 2 OPTIONS:
   // 1. On vérifie tous les dossiers qui commence par "fil"
@@ -229,7 +255,12 @@ int get_last_messages(int nb, int fil, message* messages) {
   return 0;
 }
 
-int list_tickets(client_msg* msg) {
+int send_msg_ticket(int sockclient, int numfil, char* origine, message* msg) {
+  // ...
+  return 0;
+}
+
+int list_tickets(int sockclient, client_msg* msg) {
   // This function supposes that the msg has been validated
   if(msg->NB <= 0) {
     fprintf(stderr, "Bad Number");
@@ -261,7 +292,13 @@ int list_tickets(client_msg* msg) {
     return -1;
   }
 
-  get_last_messages(msg->NB, msg->NUMFIL, messages);
+  if(get_last_messages(msg->NB, msg->NUMFIL, messages) != 0) {
+    // send error
+    free(messages);
+    return -1;
+  }
+
+
 
   free(messages);
   return 0;
@@ -342,15 +379,13 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
   return 0;
 }
 
-
 int main(int argc, char** args) {
-
-  // int nb = 3;
-  // message* mess = malloc(sizeof(message) * nb);
-  // get_last_messages(nb, 1, mess);
-  // for(int i=0;i<10;i++)
-  //   printf("msg: %d %s\n", mess[i].ID, mess[i].text);
-  // free(mess);
+  // int ids[] = {133322, 12, 999};
+  // for(int i=0;i<3;i++) {
+  //   char pseudo[11];
+  //   get_pseudo(ids[i], pseudo);
+  //   printf("%s\n", pseudo);
+  // }
   // return 0;
 
   if (argc < 2) {
