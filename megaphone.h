@@ -27,4 +27,7 @@ typedef struct {
   char text[256];
 }message;
 
+// FUNCTIONS
+int get_pseudo(int id, char* pseudo);
+
 #endif

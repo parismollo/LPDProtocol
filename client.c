@@ -159,8 +159,8 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
-    // send_ticket(sock, 0, "bonjour a tous");
-    get_tickets(sock, 5, 5);
+    send_ticket(sock, 0, "bonjour a tous");
+    //get_tickets(sock, 5, 5);
 
     // RECEPTION MSG SERVEUR
     char bufrecv[SIZE_MESS+1];

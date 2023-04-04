@@ -120,13 +120,32 @@ int recv_client_subscription(int sockclient, client_msg* cmsg) {
   return 0;
 }   
 
+int nb_msg_fil(int fil) {
+  char buf[100] = {0};
+  sprintf(buf, "fil%d/fil%d.txt", fil, fil);
+  int fd = open(buf, O_RDONLY, 0666);
+  if(fd < 0) {
+    perror("erreur ouverture fil");
+    return 0;
+  }
+  goto_last_line(fd);
+  memset(buf, 0, 100);
+  int n = read(fd, buf, 100);
+  close(fd);
+
+  if(n <= 0)
+    return 0;
+  
+  return atoi(buf);
+}
+
 int handle_ticket(client_msg* msg) {
   // This function supposes that the msg has been validated
   char buf[100];
   sprintf(buf, "fil%d/fil%d.txt", msg->NUMFIL, msg->NUMFIL);
-  printf("%s\n",buf);
+  // printf("%s\n",buf);
   int fd, n;
-  fd = open(buf, O_WRONLY | O_APPEND | O_CREAT, 0666);
+  fd = open(buf, O_RDWR | O_CREAT, 0666);
   if (fd == -1) {
     memset(buf, 0, sizeof(buf));
     sprintf(buf, "fil%d", msg->NUMFIL);
@@ -140,45 +159,74 @@ int handle_ticket(client_msg* msg) {
     }
   }
   else {
+    // On récupère le nombre de message dans le fil
+    int nb_msg = nb_msg_fil(msg->NUMFIL);
+
+    // On récupère  le pseudo du client
+    char pseudo[11];
+    if(get_pseudo(msg->ID, pseudo) != 0) {
+      fprintf(stderr, "Erreur: impossible de recuperer le pseudo\n");
+      return 1;
+    }
+
+    // va sur la derniere ligne du fichier
+    goto_last_line(fd);
+
+    // On écrit le pseudo
     memset(buf, 0, sizeof(buf));
-    sprintf(buf, "ID: %d\n", msg->ID);
+    sprintf(buf, "ID:%d PSEUDO:%s\nDATA: ", msg->ID, pseudo);
     write(fd, buf, strlen(buf));
 
-    printf("DATA: %s\n", msg->DATA);
+    // On écrit le message
     n = write(fd, msg->DATA, msg->DATALEN);
-    // printf("n: %d\n", n);
     if (n < 1 || write(fd, "\n", 1) < 1) {
       perror("failed to write");
       return -1;
-    } 
+    }
+
+    // On écrit le nouveau nb de msg total en bas du fichier
+    sprintf(buf, "%d", ++nb_msg);
+    n = write(fd, buf, strlen(buf));
+    if(n <= 0) {
+      perror("error: write");
+      return -1;
+    }
   }
   return 0;
 }
 
 // Enregistre le pseudo dans la variable pseudo
-void get_pseudo(int id, char* pseudo) {
+int get_pseudo(int id, char* pseudo) {
   FILE* f = fopen(DATABASE, "r");
   if(f == NULL)
-    return;
-    
+    return 1;
+  
   char buf[1024];
-  char* ptr;
+  memset(buf, 0, 1024);
+  char* ptr, *sep = " \n";
   while(fgets(buf, 1024, f) != NULL) {
-    ptr = strtok(buf, " \n");
+    // printf("buf: %s\n", buf);
+    ptr = strtok(buf, sep);
     if(ptr == NULL)
-      break;
+      return 1;
+    
     if(atoi(ptr) == id) {
-      ptr = strtok(NULL, " \n");
+      
+      ptr = strtok(NULL, sep);
       if(ptr == NULL)
-        break;
+        return 1;
       memset(pseudo, 0, 11);
       int min = strlen(ptr);
       if(min > 10)
         min = 10;
       memmove(pseudo, ptr, min);
+      break;
     }
+    memset(buf, 0, 1024);
   }
   fclose(f);
+
+  return 0;
 }
 
 int nb_fils() {
@@ -217,7 +265,7 @@ int get_last_messages(int nb, int fil, message* messages) {
 
   char buf[100];
   sprintf(buf, "fil%d/fil%d.txt", fil, fil);
-  printf("%s\n",buf);
+  // printf("%s\n",buf);
 
   char line[1024];
 
@@ -277,7 +325,7 @@ int list_tickets(int sockclient, client_msg* msg) {
 
   char buf[100];
   sprintf(buf, "fil%d/fil%d.txt", msg->NUMFIL, msg->NUMFIL);
-  printf("%s\n",buf);
+  // printf("%s\n",buf);
 
   char* initator = get_fil_initiator(msg->NUMFIL);
   if(initator == NULL) {
@@ -329,7 +377,7 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
   cmsg->CODEREQ = (res & 0x001F); // On mask avec 111110000..
   cmsg->ID = (res & 0xFFE0) >> 5;
   // + vérifier que ID dépasse pas 11bits ?
-  printf("CODEREQ: %d ID: %d\n", cmsg->CODEREQ, cmsg->ID);
+  // printf("CODEREQ: %d ID: %d\n", cmsg->CODEREQ, cmsg->ID);
   if(cmsg->CODEREQ > 6) {
     return send_error(sockclient, "CODEREQ too large");
   }
@@ -386,6 +434,12 @@ int main(int argc, char** args) {
   //   get_pseudo(ids[i], pseudo);
   //   printf("%s\n", pseudo);
   // }
+  // return 0;
+
+  // int n = nb_msg_fil(0);
+
+  // printf("n = %d\n", n);
+
   // return 0;
 
   if (argc < 2) {

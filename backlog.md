@@ -1,11 +1,12 @@
 - [x] fonction getPseudo(int id): recupère le pseudo dans le fichier d'inscription
-- [ ] fonction nb_fils: compte tous les dossier commençant par fil
+- [ ] fonction nb_fils: compte tous les dossier commençant par fil ? Non
 - [ ] Fonction getInitator: renvoie le createur du fil (premier id)
-- [ ] fonction nb_msg_fil: Mettre le nombre de msg dans un fil a la fin du fichier ? Ou alors fonction qui ouvre le fichier et compte tous les msg
+- [x] fonction nb_msg_fil: Mettre le nombre de msg dans un fil a la fin du fichier ? Ou alors fonction qui ouvre le fichier et compte tous les msg
 - [ ] repondre au client après avoir poster un billet (regler cas f=0)
 - [ ] gérer reception des tickets **CLIENT**
 - [ ] gérer reception des abonnés fils
 - [ ] gérer bug segmentation false à l'inscription
+- [ ] **server** : gérer cas f=0 pour handle_ticket
 
 **Leopold**:
 - [ ] Demander la liste des **n** derniers billets (**SERVEUR**)
