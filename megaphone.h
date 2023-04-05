@@ -28,6 +28,11 @@ typedef struct {
 }message;
 
 // FUNCTIONS
-int get_pseudo(int id, char* pseudo);
+int get_pseudo(int id, char* pseudo, size_t pseudo_size);
+int get_fil_initiator(int fil, char* initiator, size_t buf_size);
+int get_infos(char* key, char* value, size_t val_size);
+int increase_nb_fils();
+int nb_fils();
+int change_infos(char* key, char* new_value);
 
 #endif

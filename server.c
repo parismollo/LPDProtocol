@@ -3,6 +3,7 @@
 #define SIZE_MESS 100
 #define DATA_LEN 255
 #define DATABASE "server_users.data"
+#define INFOS "infos.data"
 
 void affiche_connexion(struct sockaddr_in6 adrclient){
   char adr_buf[INET6_ADDRSTRLEN];
@@ -164,7 +165,7 @@ int handle_ticket(client_msg* msg) {
 
     // On récupère  le pseudo du client
     char pseudo[11];
-    if(get_pseudo(msg->ID, pseudo) != 0) {
+    if(get_pseudo(msg->ID, pseudo, 11) != 0) {
       fprintf(stderr, "Erreur: impossible de recuperer le pseudo\n");
       return 1;
     }
@@ -196,7 +197,7 @@ int handle_ticket(client_msg* msg) {
 }
 
 // Enregistre le pseudo dans la variable pseudo
-int get_pseudo(int id, char* pseudo) {
+int get_pseudo(int id, char* pseudo, size_t pseudo_size) {
   FILE* f = fopen(DATABASE, "r");
   if(f == NULL)
     return 1;
@@ -229,19 +230,81 @@ int get_pseudo(int id, char* pseudo) {
   return 0;
 }
 
+int increase_nb_fils() {
+  int nb = nb_fils();
+  char buffer[100];
+  sprintf(buffer, "%d", nb+1);
+  return change_infos("nb_fils", buffer);
+}
+
 int nb_fils() {
-  // 2 OPTIONS:
-  // 1. On vérifie tous les dossiers qui commence par "fil"
-  // 2. on maintient un fichier infos.txt qui contient plusieurs infos sur le
-  // serveur dont par exemple le nombre de fils en cours
-  // il suffit alors dans cette fonction de lire le chiffre dans le fichier
+  char number[100];
+  if(get_infos("nb_fils", number, 100) < 0) {
+    // Le fichier n'existe pas ou alors la ligne
+    // avec nb_fils n'existe pas donc on considère
+    // qu'il n'y aucun fil
+    return 0;
+  }
+
+  return atoi(number);
+}
+
+// On lui passe une clée
+// Et la valeur sera enregistrée dans le pointeur value
+int get_infos(char* key, char* value, size_t val_size) {
+  FILE* file = fopen(INFOS, "r");
+  if(file == NULL) {
+    return -1;
+  }
+  char line[1024];
+  char* delim = ";\n";
+  while(fgets(line, 1024, file) != NULL) {
+    char* ptr;
+    if((ptr = strtok(line, delim)) != NULL) {
+      if(strcmp(ptr, key) == 0) {
+        // La clée correspond. On récupère la valeur
+        ptr = strtok(NULL, delim);
+        if(ptr == NULL) {
+          // Le fichier est mal formé
+          return -1;
+        }
+        strncpy(value, ptr, val_size);
+        return 0;
+      }
+    }
+  }
+  
+  return -1;
+}
+
+int change_infos(char* key, char* new_value) {
+  // TODO:
+  // 1. Ouvre le fichier INFOS
+  // 2. Trouve la ligne correspondant à la clée
+  // 3. réécrit la ligne: key;new_value
+  // ATTENTION: cela peut écraser la suite du fichier
   return 0;
 }
 
-char* get_fil_initiator(int fil) {
-  // Open fil
-  // get first pseudo ?
-  return NULL;
+int get_fil_initiator(int fil, char* initiator, size_t buf_size) {
+  char buffer[1024], *ptr;
+  memset(buffer, 0, 1024);
+  sprintf(buffer, "fil%d/fil%d.txt", fil, fil);
+  FILE* file = fopen(buffer, "r");
+  if(file == NULL) {
+    perror("impossible d'ouvrir le fil");
+    return 1;
+  }
+  if(fgets(buffer, 1024, file) != NULL) {
+    if((ptr = strstr(buffer, "PSEUDO:")) != NULL) {
+      ptr += strlen("PSEUDO:");
+      strncpy(initiator, ptr, buf_size);
+      fclose(file);
+      return 0;
+    }
+  }
+  fclose(file);
+  return 1;
 }
 
 // Lit une ligne dans prendre le '\n'
@@ -323,12 +386,12 @@ int list_tickets(int sockclient, client_msg* msg) {
     2. Envoyer les N derniers messages du fil
   */
 
-  char buf[100];
+  char buf[100] = {0};
   sprintf(buf, "fil%d/fil%d.txt", msg->NUMFIL, msg->NUMFIL);
   // printf("%s\n",buf);
 
-  char* initator = get_fil_initiator(msg->NUMFIL);
-  if(initator == NULL) {
+  char initator[11] = {0};
+  if(get_fil_initiator(msg->NUMFIL, initator, 11) != 0) {
     // LE FIL N EXISTE PAS
     // send error...
     return -1;
@@ -428,20 +491,17 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
 }
 
 int main(int argc, char** args) {
-  // int ids[] = {133322, 12, 999};
-  // for(int i=0;i<3;i++) {
-  //   char pseudo[11];
-  //   get_pseudo(ids[i], pseudo);
-  //   printf("%s\n", pseudo);
-  // }
-  // return 0;
 
-  // int n = nb_msg_fil(0);
-
-  // printf("n = %d\n", n);
+  // char infos[1024];
+  // get_infos("test", infos, sizeof(infos));
+  // printf("%s\n", infos);
 
   // return 0;
 
+  int nb = nb_fils();
+
+  printf("nombre fils: %d\n", nb);
+  return 0;
   if (argc < 2) {
     fprintf(stderr, "Usage: %s <port>\n", args[0]);
     exit(1);

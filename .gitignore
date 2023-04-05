@@ -3,3 +3,7 @@ server
 client
 *.o
 *.swp
+fil*
+server_users.data
+infos.data
+client_id.data
