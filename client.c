@@ -8,7 +8,8 @@
 
 int ID = 0; // ID zero is not valid, valid id has to be > 0.
 
-
+// permet de vérifier si le client est déjà abonné au service. 
+// Elle lit l'ID du client à partir d'un fichier et renvoie 1 si l'ID est valide (supérieur à 0) ou 0 sinon.
 int check_subscription() {
     char buffer[SIZE_MESS];
     memset(buffer, 0, sizeof(buffer));
@@ -21,6 +22,8 @@ int check_subscription() {
     int n;
     if((n = read(fd, buffer, SIZE_MESS)) < 0) {
         // Failed to find id
+        perror("read in check_subscription");
+        close(fd);
         return 0;
     }
 
@@ -37,6 +40,11 @@ int send_error(int sock, char* msg) {
     exit(1);
 }
 
+// Permet d'envoyer une requête au serveur en utilisant une structure client_msg. 
+// Cette structure contient les informations nécessaires pour la requête 
+// (ID, numéro de fil, nombre de billets, etc.). 
+// La fonction combine le code de requête et l'ID du client dans un entier 16 bits et 
+// l'envoie au serveur, suivi des autres informations nécessaires.
 int query(int sock, client_msg* msg) {
 
     msg->ID &= 0x07FF; // On garde que les 11 premiers bits 
@@ -58,6 +66,9 @@ int query(int sock, client_msg* msg) {
     return 0;
 }
 
+// Permet d'envoyer un billet au serveur pour un numéro de fil donné. 
+// Elle crée une structure client_msg avec le code de requête 2 (envoi de billet) 
+// et les informations nécessaires, puis appelle la fonction query pour envoyer la requête au serveur.
 int send_ticket(int sock, int numfil, char* text) {
     client_msg msg;
     msg.CODEREQ = 2;
@@ -72,6 +83,11 @@ int send_ticket(int sock, int numfil, char* text) {
     return query(sock, &msg);
 }
 
+
+// Permet de demander au serveur de s'abonner au service en fournissant un pseudo. 
+// Elle envoie une requête avec le code 1 (abonnement) et le pseudo du client. 
+// Elle attend ensuite une réponse du serveur contenant l'ID du client, qu'elle stocke 
+// dans un fichier pour une utilisation ultérieure.
 int query_subscription(int sock, char* pseudo) {
     uint16_t a = htons(1);
 
@@ -107,7 +123,9 @@ int query_subscription(int sock, char* pseudo) {
 
     sprintf(buffer, "%hd", id);
     if(write(fd, buffer, strlen(buffer)) < 0) {
-        fprintf(stderr, "error write id in users_client file");
+        // fprintf(stderr, "error write id in users_client file");
+        perror("write id in user_client file");
+        close(fd);
         return 1;
     }
     
@@ -116,7 +134,10 @@ int query_subscription(int sock, char* pseudo) {
     return 0;
 }
 
-
+// Permet de récupérer un certain nombre de billets pour un numéro de fil donné. 
+// Elle crée une structure client_msg avec le code de requête 3 (récupération de billets), 
+// le numéro de fil et le nombre de billets demandés, 
+// puis appelle la fonction query pour envoyer la requête au serveur.
 int get_tickets(int sock, int num_fil, int nombre_billets) {
     client_msg msg;
     msg.CODEREQ = 3;
@@ -128,6 +149,8 @@ int get_tickets(int sock, int num_fil, int nombre_billets) {
     return query(sock, &msg);
 }
 
+// Permet de s'abonner à un fil de discussion en envoyant une requête avec le code 4 (abonnement à un fil) 
+// et le numéro de fil souhaité. Elle utilise également la fonction query pour envoyer la requête au serveur.
 int abonner_au_fil(int sock, int num_fil) {
     client_msg msg;
     msg.CODEREQ = 4;

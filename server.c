@@ -94,7 +94,11 @@ int recv_client_subscription(int sockclient, client_msg* cmsg) {
 
   goto_last_line(fd);
 
-  read(fd, buffer, sizeof(buffer));
+  if(read(fd, buffer, sizeof(buffer))<0){
+    perror("read in recv_client_subscription");
+    close(fd);
+    return -1;
+  }
 
   if(strlen(buffer) != 0)
     id = atoi(buffer);
@@ -104,10 +108,18 @@ int recv_client_subscription(int sockclient, client_msg* cmsg) {
 
   clear_pseudo(pseudo);
   sprintf(buffer, "%d %s\n", id, pseudo);
-  write(fd, buffer, strlen(buffer));
+  if(write(fd, buffer, strlen(buffer))<0){
+    perror("write in recv_client_subscription");
+    close(fd);
+    return -1;
+  }
 
   sprintf(buffer, "%d", id);
-  write(fd, buffer, strlen(buffer));
+  if(write(fd, buffer, strlen(buffer))<0){
+    perror("write in recv_client_subscription");
+    close(fd);
+    return -1;
+  }
 
   close(fd);
 
@@ -132,6 +144,11 @@ int nb_msg_fil(int fil) {
   goto_last_line(fd);
   memset(buf, 0, 100);
   int n = read(fd, buf, 100);
+  if(n<0){
+    perror("read in nb_msg_fil");
+    close(fd);
+    return 0;
+  }
   close(fd);
 
   if(n <= 0)
@@ -176,12 +193,17 @@ int handle_ticket(client_msg* msg) {
     // On écrit le pseudo
     memset(buf, 0, sizeof(buf));
     sprintf(buf, "ID:%d PSEUDO:%s\nDATA: ", msg->ID, pseudo);
-    write(fd, buf, strlen(buf));
+    if(write(fd, buf, strlen(buf))<0){
+      perror("write pseudo in handle_ticket");
+      close(fd);
+      return -1;
+    }
 
     // On écrit le message
     n = write(fd, msg->DATA, msg->DATALEN);
     if (n < 1 || write(fd, "\n", 1) < 1) {
-      perror("failed to write");
+      perror("failed to write message in handle_ticket");
+      close(fd);
       return -1;
     }
 
@@ -189,7 +211,8 @@ int handle_ticket(client_msg* msg) {
     sprintf(buf, "%d", ++nb_msg);
     n = write(fd, buf, strlen(buf));
     if(n <= 0) {
-      perror("error: write");
+      perror("write nb msg in handle_ticket");
+      close(fd);
       return -1;
     }
   }
@@ -307,13 +330,16 @@ int get_fil_initiator(int fil, char* initiator, size_t buf_size) {
   return 1;
 }
 
-// Lit une ligne dans prendre le '\n'
+// Lit une ligne sans prendre le '\n'
 int readline(int fd, char* line, size_t buf_size) {
   char c;
   memset(line, 0, buf_size);
   for(int i=0;i<buf_size;i++) {
-    if(read(fd, &c, 1) < 0)
+    if(read(fd, &c, 1) < 0){
+      perror("read in readline");
+      close(fd);
       return 1;
+    }
     if(c == '\n')
       return 0;
     line[i] = c;
@@ -339,7 +365,11 @@ int get_last_messages(int nb, int fil, message* messages) {
   long num_lines = 0, current_pos;
   for (current_pos = file_size - 1; current_pos >= 0; current_pos--) {
     lseek(fd, current_pos, SEEK_SET);
-    read(fd, buf, 1);
+    if(read(fd, buf, 1)<0){
+      perror("read in get_last_message");
+      close(fd);
+      return -1;
+    }
     if(*buf == '\n')
       num_lines++;
     if(num_lines >= nb * 2)

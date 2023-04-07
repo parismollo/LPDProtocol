@@ -3,26 +3,20 @@
 - [ ] gérer reception des tickets **CLIENT**
 - [ ] gérer reception des abonnés fils
 - [ ] gérer bug segmentation false à l'inscription
-- [ ] **server** : gérer cas f=0 pour handle_ticket
-- [ ] Fonction change_infos(key, ..): modifie la valeur pour la clée key dans le fichier info.data (MACRO: INFOS)
 
 **Leopold**:
 - [ ] Demander la liste des **n** derniers billets (**SERVEUR**)
-- [x] fonction getPseudo(int id): recupère le pseudo dans le fichier d'inscription
-- [x] fonction nb_fils: compte tous les dossier commençant par fil ? Non
-- [x] Fonction getInitator: renvoie le createur du fil (premier id)
-- [x] fonction get_infos qui récupère la valeur reliée à une clée dans le fichier infos.data
-- [x] fonction nb_msg_fil: utilise la fonction get_infos pour récupérer la valeur après le champs "nb_fils"
-- [x] fonction increase_nb_fils (utilise change_infos)
 
 **Paris**:
-- [ ] Demander la liste des **n** derniers billets (**CLIENT**)
+
 
 **Daniel**:
-- [ ] Vérifier que le client fonctionne pour poster un billet sur le serveur de la prof
-- [x] faire serveur qui accepte ipv6 et ipv4
+- [x] RELIRE LE CODE AVEC GTP POUR BIEN COMPRENDRE
+- [x] verify write and read (handle error)  --> juste voire la fct et faire perror, return ect en fct du type mais pas exit, dmder gtp
+- [ ] Vérifier que le client fonctionne pour poster un billet sur le serveur de la prof --> copié file sur lulu et lancer 2-3 fois en regardant reponse et file crée et comparer avec notre serveur
 - [ ] Ajouter tout teste de verification avant valider msg du client (si codereq ok, si id existe, etc...)
-- [ ] verify write and read (handle error)
+- [x] faire serveur qui accepte ipv6 et ipv4
+
 
 ---
 
