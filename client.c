@@ -37,6 +37,58 @@ int send_error(int sock, char* msg) {
     exit(1);
 }
 
+int server_notification_post(int sockclient, client_msg* cmsg) {
+  if (sockclient < 0)
+    return 1;
+  uint16_t res;
+  int recu = recv(sockclient, &res, sizeof(uint16_t), 0);
+  if (recu <= 0){
+    perror("erreur lecture");
+    return(1);
+  }
+
+  res = ntohs(res);
+  cmsg->CODEREQ = (res & 0x001F); // On mask avec 111110000..
+  if (cmsg->CODEREQ == 31) return 1;
+  cmsg->ID = (res & 0xFFE0) >> 5;
+  recu = recv(sockclient, &res, sizeof(uint16_t), 0);
+  
+  if (recu <= 0){
+    perror("erreur lecture");
+    return 1;
+  }
+  cmsg->NUMFIL = ntohs(res);
+  recu = recv(sockclient, &res, sizeof(uint16_t), 0);
+  
+  if (recu <= 0){
+    return send_error(sockclient, "error recv");
+  }
+  
+  cmsg->NB = ntohs(res);
+  recu = recv(sockclient, &res, sizeof(uint8_t), 0);
+  
+//   if (recu <= 0){ No data here for server notification
+//     return send_error(sockclient, "xerror recv");
+//   }
+  
+  cmsg->DATALEN = res;
+  cmsg->DATA = malloc(sizeof(char) * cmsg->DATALEN);
+  
+  if(cmsg->DATA == NULL) {
+    perror("malloc");
+    return 1;
+  }
+  memset(cmsg->DATA, 0, cmsg->DATALEN);
+  recu = recv(sockclient, cmsg->DATA, cmsg->DATALEN, 0);
+  if (recu != cmsg->DATALEN) {
+    return send_error(sockclient, "error DATALEN");
+  }
+
+  printf("**Server notification**: CODEREQ: %d ID: %d NUMFIL: %d DATA: %s\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->DATA);
+
+  return 0;
+}
+
 int query(int sock, client_msg* msg) {
 
     msg->ID &= 0x07FF; // On garde que les 11 premiers bits 
@@ -67,16 +119,17 @@ int send_ticket(int sock, int numfil, char* text) {
     msg.DATALEN = strlen(text);
     msg.DATA = text;
 
-    // printf("%d, %d, %d, %d, %d, %s\n", msg.CODEREQ, msg.ID, msg.NUMFIL, msg.NB, msg.DATALEN, msg.DATA);
-    // Check if query is okay
-    return query(sock, &msg);
+    if (query(sock, &msg) == 0) {
+        client_msg msg;
+        return server_notification_post(sock, &msg);
+    }
+    return 1;
 }
 
 int query_subscription(int sock, char* pseudo) {
     uint16_t a = htons(1);
 
-    int ecrit = send(sock, &a, sizeof(uint16_t), 0);
-    printf("nombre d'octets envoyés: %d\n", ecrit);
+    send(sock, &a, sizeof(uint16_t), 0);
 
     char buffer[10];
     // On remplit le buffer avec des '#'
@@ -92,7 +145,9 @@ int query_subscription(int sock, char* pseudo) {
     }
     res = ntohs(res);
     codereq = (res & 0x001F); // On mask avec 111110000..
+    if (codereq == 31) return 1;
     id = (res & 0xFFE0) >> 5;
+    printf("**Server notification**: CODEREQ: %d ID: %d\n", codereq, id);
     
     if(codereq != 1) {
         fprintf(stderr, "error codereq != 1");
@@ -116,6 +171,130 @@ int query_subscription(int sock, char* pseudo) {
     return 0;
 }
 
+int process_ticket(int sock) {
+  // read numfil
+  uint16_t numfil = ntohs(recv(sock, &numfil, sizeof(uint16_t), 0));
+  // read origine
+  char origine[11];
+  recv(sock, &origine, 10, 0);
+  origine[11] = '\0';
+  clear_pseudo(origine);
+  // read pseudo
+  char pseudo[11];
+  recv(sock, &pseudo, 10, 0);
+  pseudo[11] = '\0';
+  clear_pseudo(pseudo);
+  // read datalen
+  uint8_t len = recv(sock, &len, sizeof(uint8_t), 0);
+  // read data
+  char *data = malloc(sizeof(char) * len);
+  if (data == NULL) {
+    // handle error
+  }
+  memset(data, 0, len);
+  if(recv(sock, data, len, 0) <= 0) {
+    // handle error
+  }
+  printf("**Server Notification**: NUMFIL: %d PSEUDO: %s DATA: %s\n", numfil, pseudo, data);
+  return 0;
+}
+
+int server_notification_get(int sock, client_msg * cmsg) {
+  // Handle first message
+  if (sock < 0)
+    return 1;
+  uint16_t res;
+  int recu = recv(sock, &res, sizeof(uint16_t), 0);
+  if (recu <= 0){
+    perror("erreur lecture");
+    return(1);
+  }
+
+  res = ntohs(res);
+  cmsg->CODEREQ = (res & 0x001F); // On mask avec 111110000..
+  if(cmsg->CODEREQ == 31) return 1; 
+  cmsg->ID = (res & 0xFFE0) >> 5;
+  recu = recv(sock, &res, sizeof(uint16_t), 0);
+  
+  if (recu <= 0){
+    perror("erreur lecture");
+    return 1;
+  }
+  cmsg->NUMFIL = ntohs(res);
+  recu = recv(sock, &res, sizeof(uint16_t), 0);
+  
+  if (recu <= 0){
+    return send_error(sock, "error recv");
+  }
+  cmsg->NB = ntohs(res);
+  
+  recu = recv(sock, &res, sizeof(uint8_t), 0);
+  cmsg->DATALEN = res;
+
+//   if (recu <= 0){ No data here for server notification
+//     return send_error(sockclient, "xerror recv");
+//   }
+  
+  cmsg->DATA = malloc(sizeof(char) * cmsg->DATALEN);
+  if(cmsg->DATA == NULL) {
+    perror("malloc");
+    return 1;
+  }
+  memset(cmsg->DATA, 0, cmsg->DATALEN);
+  recu = recv(sock, cmsg->DATA, cmsg->DATALEN, 0);
+  
+  // if (recu != cmsg->DATALEN) { nothing here in this context
+  //   return send_error(sock, "error DATALEN");
+  // }
+
+  printf("**Server notification**: CODEREQ: %d ID: %d NUMFIL: %d :  NB: %d\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->NB);
+
+  // Handle next n messages
+  for(int i=0; i<cmsg->NB; i++) {
+    process_ticket(sock);
+  }
+
+  return 0;
+}
+
+
+int server_notification_abonnement(int sock, client_msg * cmsg) {
+  if (sock < 0)
+    return 1;
+  uint16_t res;
+  int recu = recv(sock, &res, sizeof(uint16_t), 0);
+  if (recu <= 0){
+    perror("erreur lecture");
+    return(1);
+  }
+
+  res = ntohs(res);
+  cmsg->CODEREQ = (res & 0x001F); // On mask avec 111110000..
+  if(cmsg->CODEREQ == 31) return 1; 
+  cmsg->ID = (res & 0xFFE0) >> 5;
+  recu = recv(sock, &res, sizeof(uint16_t), 0);
+  
+  if (recu <= 0){
+    perror("erreur lecture");
+    return 1;
+  }
+  cmsg->NUMFIL = ntohs(res);
+  recu = recv(sock, &res, sizeof(uint16_t), 0);
+  
+  if (recu <= 0){
+    return send_error(sock, "error recv");
+  }
+  cmsg->NB = ntohs(res);
+
+  char addrmult[17]; // faire nhtons?
+  if(recv(sock, &addrmult, sizeof(addrmult), 0)< 0) {
+    // handle error
+    return 1;
+  }
+  addrmult[17] = '\0';
+  printf("**Server notification**: CODEREQ: %d ID: %d NUMFIL: %d :  NB: %d ADDRM: %s\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->NB, addrmult);
+  return 0;
+}
 
 int get_tickets(int sock, int num_fil, int nombre_billets) {
     client_msg msg;
@@ -125,8 +304,13 @@ int get_tickets(int sock, int num_fil, int nombre_billets) {
     msg.NB = nombre_billets;
     msg.DATALEN = 0;
     msg.DATA = "";
-    return query(sock, &msg);
+    if (query(sock, &msg) == 0) {
+        client_msg msg;
+        return server_notification_get(sock, &msg);
+    }
+    return 1; 
 }
+
 
 int abonner_au_fil(int sock, int num_fil) {
     client_msg msg;
@@ -136,7 +320,11 @@ int abonner_au_fil(int sock, int num_fil) {
     msg.NB = 0;
     msg.DATALEN = 0;
     msg.DATA = "";
-    return query(sock, &msg);
+    if (query(sock, &msg) == 0) {
+      client_msg msg;
+      return server_notification_abonnement(sock, &msg);
+    }
+    return 1;
 }
 
 int main(int argc, char* argv[]) {
@@ -153,32 +341,31 @@ int main(int argc, char* argv[]) {
     if (connect(sock, (struct sockaddr *) &adrso, sizeof(adrso)) < 0) send_error(sock, "connect failed"); // 0 en cas de succès, -1 sinon
     
     if(!check_subscription()) {
-        printf("ID not found. Forcing inscription...\n");
-        query_subscription(sock, "daniel");
+        query_subscription(sock, "Paris");
         close(sock);
         return EXIT_FAILURE;
     }
 
-    send_ticket(sock, 0, "bonjour a tous");
-    //get_tickets(sock, 5, 5);
+    send_ticket(sock, 0, "Hello World! This is another one");
+    // get_tickets(sock, 5, 5);
 
     // RECEPTION MSG SERVEUR
     char bufrecv[SIZE_MESS+1];
     memset(bufrecv, 0, SIZE_MESS+1);
     
-    int n = -1;
+    // int n = -1;
 
-    if ((n = recv(sock, bufrecv, SIZE_MESS * sizeof(char), 0)) < 0) send_error(sock, "recv failed");
-    printf("Taille msg recu: %d\n", n);
+    // if ((n = recv(sock, bufrecv, SIZE_MESS * sizeof(char), 0)) < 0) send_error(sock, "recv failed");
+    // printf("Taille msg recu: %d\n", n);
     
-    bufrecv[n] = '\0';
+    // bufrecv[n] = '\0';
 
-    printf("MSG hexa: ");
-    for(int i=0;i<6;i++) {
-        printf("%4x ", bufrecv[i]);
-    }
-    puts("");
-    printf("MSG string: %s\n", bufrecv);
+    // printf("MSG hexa: ");
+    // for(int i=0;i<6;i++) {
+    //     printf("%4x ", bufrecv[i]);
+    // }
+    // puts("");
+    // printf("MSG string: %s\n", bufrecv);
 
     //*** fermeture de la socket ***
     close(sock);

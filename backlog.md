@@ -1,9 +1,3 @@
-
-- [ ] repondre au client après avoir poster un billet (regler cas f=0)
-- [ ] gérer reception des tickets **CLIENT**
-- [ ] gérer reception des abonnés fils
-- [ ] gérer bug segmentation false à l'inscription
-- [ ] **server** : gérer cas f=0 pour handle_ticket
 - [ ] Fonction change_infos(key, ..): modifie la valeur pour la clée key dans le fichier info.data (MACRO: INFOS)
 
 **Leopold**:
@@ -16,7 +10,7 @@
 - [x] fonction increase_nb_fils (utilise change_infos)
 
 **Paris**:
-- [ ] Demander la liste des **n** derniers billets (**CLIENT**)
+- [ ] gérer reception de la requete: abonner au fils **CLIENT**
 
 **Daniel**:
 - [ ] Vérifier que le client fonctionne pour poster un billet sur le serveur de la prof
@@ -41,3 +35,12 @@
 - [x] store id in file
 - [x] Demander la liste des **n** derniers billets (**CLIENT**)
 - [x] Abonner au fil (**CLIENT**)
+- [x] bug segmentation false à l'inscription
+- [x] gérer reception des tickets **CLIENT**
+- [x] repondre au client après avoir poster un billet
+- [x] **server** : gérer cas f=0 pour handle_ticket
+- [x] gérer reception de la requete: demander n derniers billets **CLIENT**
+- [x] handle error message from server codereq == 31 
+
+
+

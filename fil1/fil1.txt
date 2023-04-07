@@ -1,5 +1,3 @@
-23
-Leopold
 ID: 12213
 DATA: bonjour, a tous voici un super message
 ID: 12213
@@ -34,3 +32,4 @@ ID: 999
 DATA: bonjour, a tous999999999999
 ID: 100
 DATA: bonjour, a tou11111111110000000000
+55
