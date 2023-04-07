@@ -34,22 +34,25 @@ int send_error(int sockclient, char* msg) {
 }
 
 int query(int sock, client_msg* msg) {
+  msg->ID &= 0x07FF; // On garde que les 11 premiers bits 
+  msg->CODEREQ &= 0x001F; // On garde que les 5 premiers bits
 
-    msg->ID &= 0x07FF; // On garde que les 11 premiers bits 
-    msg->CODEREQ &= 0x001F; // On garde que les 5 premiers bits
+  // Combine le codereq (5 bits de poids faible) avec l'ID (11 bits restants)
+  uint16_t res = ((uint16_t)msg->CODEREQ) | (msg->ID << 5);
+  res = htons(res); 
+  if (send(sock, &res, sizeof(res), 0) < 0) send_error(sock, "send failed"); 
 
-    // Combine le codereq (5 bits de poids faible) avec l'ID (11 bits restants)
-    uint16_t res = ((uint16_t)msg->CODEREQ) | (msg->ID << 5);
-    res = htons(res); 
-    if (send(sock, &res, sizeof(res), 0) < 0) send_error(sock, "send failed"); 
+  u_int16_t tmp = htons(msg->NUMFIL);
+  if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0) send_error(sock, "send failed"); 
 
-    u_int16_t tmp = htons(msg->NUMFIL);
-    if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0) send_error(sock, "send failed"); 
+  tmp = htons(msg->NB);
+  if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0) send_error(sock, "send failed");
 
-    tmp = htons(msg->NB);
-    if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0) send_error(sock, "send failed");
-  
-    return 0;
+  if (msg->CODEREQ == 2) {
+    if (send(sock, &msg->DATALEN, sizeof(u_int8_t), 0) < 0) send_error(sock, "send failed");
+    if (send(sock, msg->DATA, msg->DATALEN, 0) < 0) send_error(sock, "send failed");
+  }
+  return 0;
 }
 
 void goto_last_line(int fd) {
@@ -67,13 +70,6 @@ void goto_last_line(int fd) {
   }
 }
 
-void clear_pseudo(char * pseudo){
-    char* pos_hstg = strchr(pseudo, '#');
-    if(pos_hstg == NULL)
-      return;
-    size_t length_cleared = pos_hstg - pseudo;
-    pseudo[length_cleared] = '\0';
-}
 
 int recv_client_subscription(int sockclient, client_msg* cmsg) {
   char pseudo[11];
@@ -82,7 +78,6 @@ int recv_client_subscription(int sockclient, client_msg* cmsg) {
   int n = recv(sockclient, pseudo, 10, 0);
   if (n < 0) {send_error(sockclient, "error recv");}
   pseudo[n] = '\0';
-
   char buffer[128];
   memset(buffer, 0, sizeof(buffer));
 
@@ -157,38 +152,52 @@ int nb_msg_fil(int fil) {
   return atoi(buf);
 }
 
-int handle_ticket(client_msg* msg) {
+
+int notify_ticket_reception(int sock, u_int8_t CODEREQ, uint8_t ID, int NUMFIL) {
+  // Once ticket created successfully
+  // notify client
+  client_msg notification;
+  memset(&notification, 0, sizeof(notification));
+  notification.CODEREQ = CODEREQ;
+  notification.ID = ID;
+  notification.NUMFIL = NUMFIL;
+  notification.NB = 0;
+  notification.DATA = "Ticket created"; //tmp
+  notification.DATALEN = strlen(notification.DATA);
+  return query(sock, &notification);
+}
+
+int handle_ticket(int socket, client_msg* msg) {
   // This function supposes that the msg has been validated
   char buf[100];
-  sprintf(buf, "fil%d/fil%d.txt", msg->NUMFIL, msg->NUMFIL);
-  // printf("%s\n",buf);
   int fd, n;
-  fd = open(buf, O_RDWR | O_CREAT, 0666);
-  if (fd == -1) {
+  
+  if (msg->NUMFIL == 0) {
     memset(buf, 0, sizeof(buf));
+    msg->NUMFIL = nb_fils();
     sprintf(buf, "fil%d", msg->NUMFIL);
-    
-    if(mkdir(buf, 0777)==0) {
-      return handle_ticket(msg);
-    }
-    else {
+    if(mkdir(buf, 0777)!=0) {
       perror("failed to create folder"); 
-      return -1;
+      return -1;    
     }
   }
-  else {
-    // On récupère le nombre de message dans le fil
-    int nb_msg = nb_msg_fil(msg->NUMFIL);
+  sprintf(buf, "fil%d/fil%d.txt", msg->NUMFIL, msg->NUMFIL);
+  fd = open(buf, O_RDWR | O_CREAT, 0666);
+  if(fd == 0) {
+    return send_error(socket, "This fil does not exists"); //tmp
+  }
+  // On récupère le nombre de message dans le fil
+  int nb_msg = nb_msg_fil(msg->NUMFIL);
 
-    // On récupère  le pseudo du client
-    char pseudo[11];
-    if(get_pseudo(msg->ID, pseudo, 11) != 0) {
-      fprintf(stderr, "Erreur: impossible de recuperer le pseudo\n");
-      return 1;
-    }
+  // On récupère  le pseudo du client
+  char pseudo[11];
+  if(get_pseudo(msg->ID, pseudo, 11) != 0) {
+    fprintf(stderr, "Erreur: impossible de recuperer le pseudo\n");
+    return 1;
+  }
 
-    // va sur la derniere ligne du fichier
-    goto_last_line(fd);
+  // va sur la derniere ligne du fichier
+  goto_last_line(fd);
 
     // On écrit le pseudo
     memset(buf, 0, sizeof(buf));
@@ -215,8 +224,8 @@ int handle_ticket(client_msg* msg) {
       close(fd);
       return -1;
     }
-  }
-  return 0;
+  
+  return notify_ticket_reception(socket, msg->CODEREQ, msg->ID, msg->NUMFIL);
 }
 
 // Enregistre le pseudo dans la variable pseudo
@@ -445,12 +454,12 @@ int list_tickets(int sockclient, client_msg* msg) {
   return 0;
 }
 
-int validate_and_exec_msg(client_msg* msg) {
+int validate_and_exec_msg(int socket, client_msg* msg) {
   // This function validate and call the appropriate function according to the msg
   // check if message has a valid structure, check if id exists or not, etc
   // if codereq == ? then ...
   // etc..
-  return handle_ticket(msg); //tmp
+  return handle_ticket(socket, msg); //tmp
 }
 
 
@@ -483,7 +492,6 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
     return 1;
   }
   cmsg->NUMFIL = ntohs(res);
-
   // Vérifier valeur NUMFIL?
 
   recu = recv(sockclient, &res, sizeof(uint16_t), 0);
@@ -493,7 +501,6 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
   cmsg->NB = ntohs(res);
 
   // Vérifier valeur NUMFIL?
-
   recu = recv(sockclient, &res, sizeof(uint8_t), 0);
   if (recu <= 0){
     return send_error(sockclient, "error recv");
@@ -501,22 +508,20 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
   cmsg->DATALEN = res;
 
   // if... DATALEN...
-
   cmsg->DATA = malloc(sizeof(char) * cmsg->DATALEN);
   if(cmsg->DATA == NULL) {
     perror("malloc");
     return 1;
   }
   memset(cmsg->DATA, 0, cmsg->DATALEN);
-
-  recu = recv(sockclient, cmsg->DATA, sizeof(char) * DATA_LEN, 0);
+  recu = recv(sockclient, cmsg->DATA, cmsg->DATALEN, 0);
   // printf("recu: %d", recu);
   // printf("datalen: %d", cmsg->DATALEN);
   if (recu != cmsg->DATALEN) {
     return send_error(sockclient, "error DATALEN");
   }
 
-  validate_and_exec_msg(cmsg);
+  validate_and_exec_msg(sockclient, cmsg);
   return 0;
 }
 
@@ -528,10 +533,10 @@ int main(int argc, char** args) {
 
   // return 0;
 
-  int nb = nb_fils();
+  // int nb = nb_fils();
 
-  printf("nombre fils: %d\n", nb);
-  return 0;
+  // printf("nombre fils: %d\n", nb);
+  // return 0;
   if (argc < 2) {
     fprintf(stderr, "Usage: %s <port>\n", args[0]);
     exit(1);
@@ -589,8 +594,9 @@ int main(int argc, char** args) {
   client_msg msg;
   recv_client_msg(sockclient, &msg);
 
-  if(msg.DATA)
-    free(msg.DATA);
+  // Ajouter if msg != NULL ... car comme ça valgrind n'est pas content.
+  // if(msg.DATA)
+  //   free(msg.DATA);
 
   //*** fermeture socket client ***
   close(sockclient);

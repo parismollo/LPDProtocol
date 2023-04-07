@@ -36,3 +36,11 @@ int nb_fils();
 int change_infos(char* key, char* new_value);
 
 #endif
+
+void clear_pseudo(char * pseudo){
+    char* pos_hstg = strchr(pseudo, '#');
+    if(pos_hstg == NULL)
+      return;
+    size_t length_cleared = pos_hstg - pseudo;
+    pseudo[length_cleared] = '\0';
+}
