@@ -152,7 +152,7 @@ int query_subscription(int sock, char* pseudo) {
     memset(buffer, '#', sizeof(buffer));
     memmove(buffer, pseudo, strlen(pseudo));
 
-    if(send(sock, buffer, 10, 0)< 0) send_error(sock, "send failed");
+    if(send(sock, buffer, 10, 0) < 0) send_error(sock, "send failed");
     // printf("nombre d'octets envoyés: %d\n", ecrit);
     uint16_t res, id, codereq;
     if(recv(sock, &res, sizeof(res), 0) < 0) {

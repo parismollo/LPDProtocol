@@ -1,6 +1,7 @@
 - [ ] Fonction change_infos(key, ..): modifie la valeur pour la clée key dans le fichier info.data (MACRO: INFOS)
 
 **Leopold**:
+- [x] Fonction total_msg_fils: utilise nb_fil(). Puis pour chaque fil, on appelle nb_msg_fil(fil) pour tout additionner
 - [ ] Demander la liste des **n** derniers billets (**SERVEUR**)
 
 **Paris**:
