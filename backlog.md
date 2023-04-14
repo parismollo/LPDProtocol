@@ -1,21 +1,24 @@
-- [ ] Fonction change_infos(key, ..): modifie la valeur pour la clée key dans le fichier info.data (MACRO: INFOS)
+## TODO
 
+
+
+## Doing
 **Leopold**:
-- [x] Fonction total_msg_fils: utilise nb_fil(). Puis pour chaque fil, on appelle nb_msg_fil(fil) pour tout additionner
 - [ ] Demander la liste des **n** derniers billets (**SERVEUR**)
 
 **Paris**:
-- [ ] gérer reception de la requete: abonner au fils **CLIENT**
+- [ ] Fonction change_infos(key, ..): modifie la valeur pour la clée key dans le fichier info.data (MACRO: INFOS). Comme dans getinfo, fgets pour avancer ligne par ligne, et faire strtok sur virgule, deuxième truc c'est la valeur. 
+- [ ] Tester demander n derniers billets avec serveur prof **CLIENT**
+- [ ] Tester abonner fils avec serveur prof **CLIENT**
+
 
 **Daniel**:
-- [x] RELIRE LE CODE AVEC GTP POUR BIEN COMPRENDRE
-- [x] verify write and read (handle error)  --> juste voire la fct et faire perror, return ect en fct du type mais pas exit, dmder gtp
 - [ ] Vérifier que le client fonctionne pour poster un billet sur le serveur de la prof --> copié file sur lulu et lancer 2-3 fois en regardant reponse et file crée et comparer avec notre serveur
 - [ ] Ajouter tout teste de verification avant valider msg du client (si codereq ok, si id existe, etc...)
-- [x] faire serveur qui accepte ipv6 et ipv4
+- [ ] faire feature "abonner fils" **SERVER**
 
 
----
+## Done
 
 - [x] Recevoir un billet (creation de fil si nécessaire, check id, bla bla)
 - [x] Client verifie si id existe et stocke dans une variable globale
@@ -38,6 +41,9 @@
 - [x] **server** : gérer cas f=0 pour handle_ticket
 - [x] gérer reception de la requete: demander n derniers billets **CLIENT**
 - [x] handle error message from server codereq == 31 
+- [x] faire serveur qui accepte ipv6 et ipv4
+- [x] gérer reception de la requete: abonner au fils **CLIENT**
+- [x] Fonction total_msg_fils: utilise nb_fil(). Puis pour chaque fil, on appelle nb_msg_fil(fil) pour tout additionner
 
 
 
