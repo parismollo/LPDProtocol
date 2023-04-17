@@ -148,10 +148,9 @@ int nb_msg_fil(int fil) {
 
   if(n <= 0)
     return 0;
-  
+
   return atoi(buf);
 }
-
 
 int notify_ticket_reception(int sock, u_int8_t CODEREQ, uint8_t ID, int NUMFIL) {
   // Once ticket created successfully
@@ -174,12 +173,14 @@ int handle_ticket(int socket, client_msg* msg) {
   
   if (msg->NUMFIL == 0) {
     memset(buf, 0, sizeof(buf));
-    msg->NUMFIL = nb_fils();
+    msg->NUMFIL = nb_fils() + 1;
     sprintf(buf, "fil%d", msg->NUMFIL);
     if(mkdir(buf, 0777)!=0) {
       perror("failed to create folder"); 
       return -1;    
     }
+    if(increase_nb_fils() != 0)
+      return send_error(socket, "error cannot increase nb fils number");
   }
   sprintf(buf, "fil%d/fil%d.txt", msg->NUMFIL, msg->NUMFIL);
   fd = open(buf, O_RDWR | O_CREAT, 0666);
@@ -199,31 +200,31 @@ int handle_ticket(int socket, client_msg* msg) {
   // va sur la derniere ligne du fichier
   goto_last_line(fd);
 
-    // On écrit le pseudo
-    memset(buf, 0, sizeof(buf));
-    sprintf(buf, "ID:%d PSEUDO:%s\nDATA: ", msg->ID, pseudo);
-    if(write(fd, buf, strlen(buf))<0){
-      perror("write pseudo in handle_ticket");
-      close(fd);
-      return -1;
-    }
+  // On écrit le pseudo
+  memset(buf, 0, sizeof(buf));
+  sprintf(buf, "ID:%d PSEUDO:%s\nDATA: ", msg->ID, pseudo);
+  if(write(fd, buf, strlen(buf))<0){
+    perror("write pseudo in handle_ticket");
+    close(fd);
+    return -1;
+  }
 
-    // On écrit le message
-    n = write(fd, msg->DATA, msg->DATALEN);
-    if (n < 1 || write(fd, "\n", 1) < 1) {
-      perror("failed to write message in handle_ticket");
-      close(fd);
-      return -1;
-    }
+  // On écrit le message
+  n = write(fd, msg->DATA, msg->DATALEN);
+  if (n < 1 || write(fd, "\n", 1) < 1) {
+    perror("failed to write message in handle_ticket");
+    close(fd);
+    return -1;
+  }
 
-    // On écrit le nouveau nb de msg total en bas du fichier
-    sprintf(buf, "%d", ++nb_msg);
-    n = write(fd, buf, strlen(buf));
-    if(n <= 0) {
-      perror("write nb msg in handle_ticket");
-      close(fd);
-      return -1;
-    }
+  // On écrit le nouveau nb de msg total en bas du fichier
+  sprintf(buf, "%d", ++nb_msg);
+  n = write(fd, buf, strlen(buf));
+  if(n <= 0) {
+    perror("write nb msg in handle_ticket");
+    close(fd);
+    return -1;
+  }
   
   return notify_ticket_reception(socket, msg->CODEREQ, msg->ID, msg->NUMFIL);
 }
@@ -310,11 +311,37 @@ int get_infos(char* key, char* value, size_t val_size) {
 }
 
 int change_infos(char* key, char* new_value) {
-  // TODO:
-  // 1. Ouvre le fichier INFOS
-  // 2. Trouve la ligne correspondant à la clée
-  // 3. réécrit la ligne: key;new_value
-  // ATTENTION: cela peut écraser la suite du fichier
+  char buffer[100];
+  
+  FILE * source = fopen(INFOS, "r");
+
+  FILE * dest = fopen("temp", "w");
+  if (dest == NULL) {
+    fprintf(stderr, "change_infos failed");
+    return 1;
+  }
+
+  int found = 0;
+  while(source && fgets(buffer, sizeof(buffer), source)) {
+    if(strstr(buffer, key)) {
+      found = 1;
+      fprintf(dest, "%s;%s", key, new_value);
+    } else {
+      fprintf(dest, "%s", buffer);
+    }
+  }
+
+  if(!found) {
+    fprintf(dest, "%s;%s", key, new_value);
+  }
+  
+  if(source)
+    fclose(source);
+  fclose(dest);
+
+  remove(INFOS);
+  rename("temp", INFOS);
+
   return 0;
 }
 
@@ -339,16 +366,41 @@ int get_fil_initiator(int fil, char* initiator, size_t buf_size) {
   return 1;
 }
 
+int total_msg_fils(uint8_t nb_msg_by_fil) {
+  // nb total de msg ds ts les fils
+  // Appel nb_fils()
+  // Pour chaque fil, sum += nb_msg(i)
+  int n = nb_fils();
+  int sum = 0;
+  for(int i=1;i<=n;i++) {
+    int nb_msg = nb_msg_fil(i);
+    if(nb_msg_by_fil > nb_msg || nb_msg_by_fil == 0)
+      sum += nb_msg;
+    else
+      sum += nb_msg_by_fil;
+  }
+  return sum;
+}
+
+// Vérifie si pre est bien préfix de str
+int prefix(char* str, char* pre) {
+    return strncmp(pre, str, strlen(pre)) == 0;
+}
+
 // Lit une ligne sans prendre le '\n'
 int readline(int fd, char* line, size_t buf_size) {
   char c;
+  int n;
   memset(line, 0, buf_size);
   for(int i=0;i<buf_size;i++) {
-    if(read(fd, &c, 1) < 0){
+    if((n = read(fd, &c, 1)) < 0){
       perror("read in readline");
       close(fd);
       return 1;
     }
+    else if(n == 0) // EOF -> End Of File
+      return 0;
+      
     if(c == '\n')
       return 0;
     line[i] = c;
@@ -363,94 +415,213 @@ int get_last_messages(int nb, int fil, message* messages) {
 
   char buf[100];
   sprintf(buf, "fil%d/fil%d.txt", fil, fil);
-  // printf("%s\n",buf);
 
   char line[1024];
 
   int fd = open(buf, O_RDONLY, 0666);
   
+  if(fd < 0) {
+    perror("open file");
+    return -1;
+  }
+
   long file_size = lseek(fd, 0, SEEK_END);
     
   long num_lines = 0, current_pos;
+  int skip_last_line = 1; // Permet de skip la derniere ligne
   for (current_pos = file_size - 1; current_pos >= 0; current_pos--) {
     lseek(fd, current_pos, SEEK_SET);
-    if(read(fd, buf, 1)<0){
+    if(read(fd, buf, 1) < 0){
       perror("read in get_last_message");
       close(fd);
       return -1;
     }
-    if(*buf == '\n')
+    if(*buf == '\n') {
+      // On skip la derniere ligne (soit la premiere ligne rencontrée en partant de la fin)
+      if(skip_last_line) {
+        skip_last_line = 0;
+        continue;
+      }
       num_lines++;
+    }
     if(num_lines >= nb * 2)
       break;
   }
 
+  if(current_pos == -1) {
+    // On a lu le fichier entierement. 1ere ligne comprise
+    // On doit donc ajouter cette 1ere ligne au compteur
+    num_lines++;
+  }
+
   if(num_lines < nb * 2) {
     fprintf(stderr, "il y a moins de %d msg\n", nb);
+    close(fd);
     return -1;
   }
 
+  char* ptr;
+  char* sep = ": \n";
+  int j;
   for(int i=0;i<nb;i++) {
     memset(&messages[i], 0, sizeof(message));
     // On lit l'ID
     readline(fd, line, 1024); // GESTION ERREURS
-    // Check if begins with "ID: "
-    messages[i].ID = atoi(line + 4); // strlen("ID: ") = 4
+    if(!prefix(line, "ID:"))
+      goto bad_file_format;
+    
+    // On découpe la ligne en: [ID, 123, PSEUDO, leo]
+    if((ptr = strtok(line, sep)) == NULL)
+      goto bad_file_format;
+    for(j=1;j<4 && (ptr = strtok(NULL, sep)) != NULL;j++) {
+      if(j == 1) // ID
+        messages[i].ID = atoi(ptr);
+      else if(j == 3) // PSEUDO
+        memmove(messages[i].pseudo, ptr, strlen(ptr));
+    }
+    if(j != 4)
+      goto bad_file_format;
+    
     // On lit le message
     readline(fd, line, 1024); // GESTION ERREURS
-    // Check if begins with "DATA: "
+    if(!prefix(line, "DATA:"))
+      goto bad_file_format;
     memmove(messages[i].text, line + 6, 255); // strlen("DATA: ") = 6
   }
 
+  close(fd);
   return 0;
+
+  bad_file_format:
+    if(fd)
+      close(fd);
+    fprintf(stderr, "Bad file fil format\n");
+    return -1;
 }
 
-int send_msg_ticket(int sockclient, int numfil, char* origine, message* msg) {
-  // ...
+int send_msg_ticket(int sockclient, uint16_t numfil, char* origine, message msg) {
+  
+  numfil = htons(numfil);
+  if(send(sockclient, &numfil, sizeof(numfil), 0) < 0)
+    return send_error(sockclient, "send failed"); 
+
+  // origine est sur 10 octets. 11 pour le '\0'
+  replace_after(origine, '\0', '#', 11); // On place des '#' pour combler à la fin
+  replace_after(msg.pseudo, '\0', '#', 11); // De meme pour le pseudo
+
+  // On envoie l'origine (pseudo createur du fil)
+  if(send(sockclient, origine, 10, 0) < 0)
+    return send_error(sockclient, "send failed"); 
+
+  // On envoie le pseudo de celui qui a envoye le msg
+  if(send(sockclient, msg.pseudo, 10, 0) < 0)
+    return send_error(sockclient, "send failed"); 
+
+  // Ne peut pas depasser 255
+  uint8_t data_len = (uint8_t) strlen(msg.text);
+
+  // On envoie DATA_LEN
+  if(send(sockclient, data_len, sizeof(uint8_t), 0) < 0)
+    return send_error(sockclient, "send failed"); 
+
+  // On envoie le text du message (DATA)
+  if(send(sockclient, msg.text, data_len, 0) < 0)
+    return send_error(sockclient, "send failed"); 
+
   return 0;
 }
 
 int list_tickets(int sockclient, client_msg* msg) {
   // This function supposes that the msg has been validated
-  if(msg->NB <= 0) {
-    fprintf(stderr, "Bad Number");
-    return -1;
-  }
 
   /*
-    1. Envoyer un premier billet selon les conditions du pdf
+    1. Envoyer un premier billet selon les conditions suivantes:
   */
+
+  /*
+    1) Vérifier que le client est bien inscrit
+    2) Renvoyer un message au client avec le meme ID et CODEREQ
+    3) Si NUMFIL est positif, on garde le même
+       Sinon, si il est égale à 0, on a: NUMFIL=nb_fils()
+    4) Si f (NUMFIL client) > 0:
+          NB = SI n > nb_msg_fil f -> nb_msg_fil()
+          OU SI n = 0 -> nb_msg_fil()
+          SINON n
+       SINON (si f n'est pas un vrai fil):
+          NB = somme du nombre de messages envoyés de chaque fil.
+  */
+
+  // if(check_subscription)......
+
+  client_msg response = {0};
+  response.ID = msg->ID;
+  response.CODEREQ = msg->CODEREQ;
+  response.NUMFIL = msg->NUMFIL == 0 ? nb_fils() : msg->NUMFIL;
+
+  if(msg->NUMFIL > 0) { // Correspond à un fil existant
+    int nb_msg = nb_msg_fil(msg->NUMFIL);
+    if(msg->NB > nb_msg || msg->NB == 0)
+      response.NB = nb_msg;
+    else
+      response.NB = msg->NB;
+  }
+  else { // 0 -> NB msg de tous les fils
+    response.NB = total_msg_fils(msg->NB);
+  }
+
+  if(query(sockclient, &response) < 0)
+    return send_error(sockclient, "error: send entete list_tickets");
 
   /*
     2. Envoyer les N derniers messages du fil
   */
-
-  char buf[100] = {0};
-  sprintf(buf, "fil%d/fil%d.txt", msg->NUMFIL, msg->NUMFIL);
-  // printf("%s\n",buf);
-
   char initator[11] = {0};
-  if(get_fil_initiator(msg->NUMFIL, initator, 11) != 0) {
-    // LE FIL N EXISTE PAS
-    // send error...
-    return -1;
-  }
 
-  message* messages = malloc(sizeof(message) * msg->NB);
-  if(messages == NULL) {
-    //send error
-    return -1;
-  }
+  // TODO: CAS OU NUMFIL > 0 
+  // if(msg->NUMFIL > 0) {
+  //   memset(buf, 0, 100);
+  //   sprintf(buf, "fil%d/fil%d.txt", msg->NUMFIL, msg->NUMFIL);
+  // }
+  // else {
 
-  if(get_last_messages(msg->NB, msg->NUMFIL, messages) != 0) {
-    // send error
+  // }
+
+  // Si msg->NUMFIL == 0, on parcourt tous les fils
+  for(int i=1;msg->NUMFIL == 0 && i<=response.NUMFIL;i++) {
+    memset(initator, 0, 11);
+    if(get_fil_initiator(i, initator, 11) != 0) {
+      // LE FIL N EXISTE PAS
+      continue;
+    }
+
+    // On récupère le nombre de messages qu'on veut
+    int nb_msg = nb_msg_fil(i);
+    if(msg->NB <= nb_msg && msg->NB != 0)
+      nb_msg = msg->NB;
+
+    message* messages = malloc(sizeof(message) * msg->NB);
+    if(messages == NULL) {
+      // send error
+      return -1;
+    }
+
+    if(get_last_messages(nb_msg, i, messages) != 0) {
+      // send error
+      free(messages);
+      return -1;
+    }
+
+    for(int j=0;j<nb_msg;i++) {
+      if(send_msg_ticket(sockclient, i, initator, messages[i]) != 0) {
+        // send error
+        free(messages);
+        return -1;
+      }
+    }
+
     free(messages);
-    return -1;
   }
 
-
-
-  free(messages);
   return 0;
 }
 
@@ -537,6 +708,20 @@ int main(int argc, char** args) {
 
   // printf("nombre fils: %d\n", nb);
   // return 0;
+
+  // TEST: get_last_messages
+  // message mess[10];
+  // get_last_messages(6, 0, mess);
+  // for(int i=0;i<6;i++) {
+  //   printf("%d %s %s\n", mess[i].ID, mess[i].pseudo, mess[i].text);
+  // }
+
+  // TEST: nb_msg_fil(fil)
+  // printf("%d\n", nb_msg_fil(0));
+
+  // change_infos("nb_fils", "52");
+  // return 0;
+
   if (argc < 2) {
     fprintf(stderr, "Usage: %s <port>\n", args[0]);
     exit(1);
