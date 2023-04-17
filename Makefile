@@ -6,8 +6,8 @@ define confirm
 endef
 
 all:
-	gcc -Wall client.c -o client
-	gcc -Wall server.c -o server
+	gcc -Wall client.c functions.c -o client
+	gcc -Wall server.c functions.c -o server
 
 clean:
 	rm -rf server
@@ -17,3 +17,5 @@ reset_database:
 	$(call confirm)
 	rm -rf client_id.data
 	rm -rf server_users.data
+	rm -rf infos.data
+	rm -rf fil[0-9]*

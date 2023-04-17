@@ -8,6 +8,7 @@
 **Paris**:
 - [ ] Tester demander n derniers billets avec serveur prof **CLIENT**
 - [ ] Tester abonner fils avec serveur prof **CLIENT**
+- [ ] Améliorer fonction query pour s'adapter à toutes possibilités
 
 **Daniel**:
 - [ ] Vérifier que le client fonctionne pour poster un billet sur le serveur de la prof --> copié file sur lulu et lancer 2-3 fois en regardant reponse et file crée et comparer avec notre serveur

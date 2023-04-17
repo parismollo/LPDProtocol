@@ -28,19 +28,13 @@ typedef struct {
 }message;
 
 // FUNCTIONS
+void clear_pseudo(char * pseudo);
 int get_pseudo(int id, char* pseudo, size_t pseudo_size);
 int get_fil_initiator(int fil, char* initiator, size_t buf_size);
 int get_infos(char* key, char* value, size_t val_size);
 int increase_nb_fils();
 int nb_fils();
 int change_infos(char* key, char* new_value);
+int query(int sock, client_msg* msg);
 
 #endif
-
-void clear_pseudo(char * pseudo){
-    char* pos_hstg = strchr(pseudo, '#');
-    if(pos_hstg == NULL)
-      return;
-    size_t length_cleared = pos_hstg - pseudo;
-    pseudo[length_cleared] = '\0';
-}

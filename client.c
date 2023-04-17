@@ -97,6 +97,25 @@ int server_notification_post(int sockclient, client_msg* cmsg) {
   return 0;
 }
 
+// Permet d'envoyer un billet au serveur pour un numéro de fil donné. 
+// Elle crée une structure client_msg avec le code de requête 2 (envoi de billet) 
+// et les informations nécessaires, puis appelle la fonction query pour envoyer la requête au serveur.
+int send_ticket(int sock, int numfil, char* text) {
+    client_msg msg;
+    msg.CODEREQ = 2;
+    msg.ID = ID;
+    msg.NUMFIL = numfil;
+    msg.NB = 0;
+    msg.DATALEN = strlen(text);
+    msg.DATA = text;
+
+    if (query(sock, &msg) == 0) {
+        client_msg msg;
+        return server_notification_post(sock, &msg);
+    }
+    return 1;
+}
+
 int query(int sock, client_msg* msg) {
 
     msg->ID &= 0x07FF; // On garde que les 11 premiers bits 
@@ -117,26 +136,6 @@ int query(int sock, client_msg* msg) {
 
     return 0;
 }
-
-// Permet d'envoyer un billet au serveur pour un numéro de fil donné. 
-// Elle crée une structure client_msg avec le code de requête 2 (envoi de billet) 
-// et les informations nécessaires, puis appelle la fonction query pour envoyer la requête au serveur.
-int send_ticket(int sock, int numfil, char* text) {
-    client_msg msg;
-    msg.CODEREQ = 2;
-    msg.ID = ID;
-    msg.NUMFIL = numfil;
-    msg.NB = 0;
-    msg.DATALEN = strlen(text);
-    msg.DATA = text;
-
-    if (query(sock, &msg) == 0) {
-        client_msg msg;
-        return server_notification_post(sock, &msg);
-    }
-    return 1;
-}
-
 
 // Permet de demander au serveur de s'abonner au service en fournissant un pseudo. 
 // Elle envoie une requête avec le code 1 (abonnement) et le pseudo du client. 
