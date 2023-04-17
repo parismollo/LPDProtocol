@@ -1,16 +1,13 @@
 ## TODO
 
 
-
 ## Doing
 **Leopold**:
 - [ ] Demander la liste des **n** derniers billets (**SERVEUR**)
 
 **Paris**:
-- [ ] Fonction change_infos(key, ..): modifie la valeur pour la clée key dans le fichier info.data (MACRO: INFOS). Comme dans getinfo, fgets pour avancer ligne par ligne, et faire strtok sur virgule, deuxième truc c'est la valeur. 
 - [ ] Tester demander n derniers billets avec serveur prof **CLIENT**
 - [ ] Tester abonner fils avec serveur prof **CLIENT**
-
 
 **Daniel**:
 - [ ] Vérifier que le client fonctionne pour poster un billet sur le serveur de la prof --> copié file sur lulu et lancer 2-3 fois en regardant reponse et file crée et comparer avec notre serveur
@@ -44,6 +41,6 @@
 - [x] faire serveur qui accepte ipv6 et ipv4
 - [x] gérer reception de la requete: abonner au fils **CLIENT**
 - [x] Fonction total_msg_fils: utilise nb_fil(). Puis pour chaque fil, on appelle nb_msg_fil(fil) pour tout additionner
-
+- [x] Fonction change_infos(key, ..): modifie la valeur pour la clée key dans le fichier info.data (MACRO: INFOS). Comme dans getinfo, fgets pour avancer ligne par ligne, et faire strtok sur virgule, deuxième truc c'est la valeur. 
 
 

@@ -310,11 +310,34 @@ int get_infos(char* key, char* value, size_t val_size) {
 }
 
 int change_infos(char* key, char* new_value) {
-  // TODO:
-  // 1. Ouvre le fichier INFOS
-  // 2. Trouve la ligne correspondant à la clée
-  // 3. réécrit la ligne: key;new_value
-  // ATTENTION: cela peut écraser la suite du fichier
+  char buffer[100];
+
+  FILE * source = fopen(INFOS, "r");
+  if (source == NULL) {
+    printf("change_infos failed");
+    return 1;
+  }
+
+  FILE * dest = fopen("temp", "w");
+  if (dest == NULL) {
+    printf("change_infos failed");
+    return 1;
+  }
+
+  while(fgets(buffer, sizeof(buffer), source)) {
+    if(strstr(buffer, key)) {
+      fprintf(dest, "%s;%s", key, new_value);
+    }else {
+      fprintf(dest, "%s", buffer);
+    }
+  }
+
+  fclose(source);
+  fclose(dest);
+
+  remove("infos.data");
+  rename("temp", "infos.data");
+
   return 0;
 }
 
@@ -625,7 +648,8 @@ int main(int argc, char** args) {
   // TEST: nb_msg_fil(fil)
   // printf("%d\n", nb_msg_fil(0));
 
-  // return 0;
+  change_infos("nb_fils", "52");
+  return 0;
 
   if (argc < 2) {
     fprintf(stderr, "Usage: %s <port>\n", args[0]);
