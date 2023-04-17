@@ -143,6 +143,12 @@ int send_ticket(int sock, int numfil, char* text) {
 // Elle attend ensuite une réponse du serveur contenant l'ID du client, qu'elle stocke 
 // dans un fichier pour une utilisation ultérieure.
 int query_subscription(int sock, char* pseudo) {
+
+    if(!check_subscription()) {
+        close(sock);
+        return EXIT_FAILURE;
+    }
+
     uint16_t a = htons(1);
 
     send(sock, &a, sizeof(uint16_t), 0);
@@ -363,11 +369,9 @@ int main(int argc, char* argv[]) {
     inet_pton(AF_INET6, IP_SERVER, &adrso.sin6_addr); // On écrit l'ip dans adrso.sin_addr
     if (connect(sock, (struct sockaddr *) &adrso, sizeof(adrso)) < 0) send_error(sock, "connect failed"); // 0 en cas de succès, -1 sinon
     
-    if(!check_subscription()) {
-        query_subscription(sock, "Paris");
-        close(sock);
-        return EXIT_FAILURE;
-    }
+
+    query_subscription(sock, "Paris");
+    
 
     send_ticket(sock, 0, "Hello World! This is another one");
     // get_tickets(sock, 5, 5);
