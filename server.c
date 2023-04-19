@@ -522,7 +522,7 @@ int send_msg_ticket(int sockclient, uint16_t numfil, char* origine, message msg)
   uint8_t data_len = (uint8_t) strlen(msg.text);
 
   // On envoie DATA_LEN
-  if(send(sockclient, data_len, sizeof(uint8_t), 0) < 0)
+  if(send(sockclient, &data_len, sizeof(uint8_t), 0) < 0)
     return send_error(sockclient, "send failed"); 
 
   // On envoie le text du message (DATA)
@@ -578,17 +578,11 @@ int list_tickets(int sockclient, client_msg* msg) {
   */
   char initator[11] = {0};
 
-  // TODO: CAS OU NUMFIL > 0 
-  // if(msg->NUMFIL > 0) {
-  //   memset(buf, 0, 100);
-  //   sprintf(buf, "fil%d/fil%d.txt", msg->NUMFIL, msg->NUMFIL);
-  // }
-  // else {
+  int i = 1; // Par défaut, i=1, on va parcourir tous les fils
+  if(msg->NUMFIL > 0) // Sinon, si on veut un fil en particulier
+    i = response.NUMFIL; // On fait 1 seul tour de boucle.
 
-  // }
-
-  // Si msg->NUMFIL == 0, on parcourt tous les fils
-  for(int i=1;msg->NUMFIL == 0 && i<=response.NUMFIL;i++) {
+  for(;i<=response.NUMFIL;i++) {
     memset(initator, 0, 11);
     if(get_fil_initiator(i, initator, 11) != 0) {
       // LE FIL N EXISTE PAS
@@ -655,17 +649,17 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
   // if codereq == ? then ...
   // etc..
   u_int8_t req = msg->CODEREQ;
-  if(req > 6 || req < 1){
+  if(req > 6 || req < 1) {
     send_error(socket, "le code de requete doit être entre 1 et 6");
     return -1;
   }
-  if(req != 1){//Verify that the user is regitered
+  if(req != 1) { // Verify that the user is regitered
     if(!is_user_registered(msg->ID)){
       send_error(socket, "veuillez-vous inscrire");
       return -1;
     }
   }
-  if(req > 2){ //Verifie que le fil existe
+  if(req > 2) { // Verifie que le fil existe
     if(msg->NUMFIL < 0 || msg->NUMFIL > nb_fils()){
         send_error(socket, "Ce fil n'existe pas");
         return -1;
@@ -674,7 +668,7 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
   char pseudo[11];
  
   
-  switch(req){
+  switch(req) {
     case 1 :
       memset(pseudo, 0, sizeof(pseudo));
       int n = recv(socket, pseudo, 10, 0);
@@ -691,25 +685,25 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
       return recv_client_subscription(socket, msg);
 
     case 2 :
-      if(msg->NB != 0){
+      if(msg->NB != 0) {
         send_error(socket, "NB value must be 0");
         return -1;
       }
       return handle_ticket(socket, msg);
     
     case 3 :
-      if(msg->DATALEN != 0 || strlen(msg->DATA) != 0){
+      if(msg->DATALEN != 0 || strlen(msg->DATA) != 0) {
         send_error(socket, "DATALEN must be 0 and DATA must be empty");
         return -1;
       }
       return list_tickets(socket, msg);
 
     case 4 :
-      if(msg->NB != 0){
+      if(msg->NB != 0) {
         send_error(socket, "NB value must be 0");
         return -1;
       }
-      if(msg->DATALEN != 0 || strlen(msg->DATA) != 0){
+      if(msg->DATALEN != 0 || strlen(msg->DATA) != 0) {
         send_error(socket, "DATALEN must be 0 and DATA must be empty");
         return -1;
       }
@@ -717,7 +711,7 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
       break;
 
     case 5 : 
-      if(msg->NB != 0){
+      if(msg->NB != 0) {
         send_error(socket, "NB value must be 0");
         return -1;
       }
@@ -739,10 +733,11 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
   //*** reception d'un message ***
   uint16_t res;
   int recu = recv(sockclient, &res, sizeof(uint16_t), 0);
-  if (recu <= 0){
-    perror("erreur lecturex");
-    return(1);
+  if (recu <= 0) {
+    perror("erreur lecture");
+    return 1;
   }
+  
   // Ici on va convertir en ordre du host et prendre les valeurs de codereq et id. Pour ID on a besoin de
   // les caler à nouveau 5 bits vers la droite, voir dessin pour mieux comprendre. (board.excalidraw)
   res = ntohs(res);
@@ -757,26 +752,28 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
     return recv_client_subscription(sockclient, cmsg);
   }
   recu = recv(sockclient, &res, sizeof(uint16_t), 0);
-  if (recu <= 0){
-    perror("erreur lecturey");
+  if (recu <= 0) {
+    perror("erreur lecture");
     return 1;
   }
   cmsg->NUMFIL = ntohs(res);
   // Vérifier valeur NUMFIL?
 
   recu = recv(sockclient, &res, sizeof(uint16_t), 0);
-  if (recu <= 0){
+  if (recu <= 0) {
     return send_error(sockclient, "error recv");
   }
   cmsg->NB = ntohs(res);
-
   // Vérifier valeur NUMFIL?
   recu = recv(sockclient, &res, sizeof(uint8_t), 0);
-  if (recu <= 0){
+  if (recu <= 0) {
     return send_error(sockclient, "error recv");
   }
   cmsg->DATALEN = res;
 
+  /////// WARNING ////////////////
+  // Ici parfois il n'y pas besoin de faire de recv pour data et peut
+  // etre aussi pour datalen. A voir. TODO
   // if... DATALEN...
   cmsg->DATA = malloc(sizeof(char) * cmsg->DATALEN);
   if(cmsg->DATA == NULL) {
@@ -791,6 +788,9 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
     return send_error(sockclient, "error DATALEN");
   }
 
+  // A decommenter pour tester list_tickets directement...
+  // list_tickets(sockclient, cmsg);
+
   validate_and_exec_msg(sockclient, cmsg);
   return 0;
 }
@@ -801,12 +801,9 @@ int main(int argc, char** args) {
   // get_infos("test", infos, sizeof(infos));
   // printf("%s\n", infos);
 
-  // return 0;
-
   // int nb = nb_fils();
 
   // printf("nombre fils: %d\n", nb);
-  // return 0;
 
   // TEST: get_last_messages
   // message mess[10];
@@ -819,6 +816,10 @@ int main(int argc, char** args) {
   // printf("%d\n", nb_msg_fil(0));
 
   // change_infos("nb_fils", "52");
+
+  // printf("%d\n", total_msg_fils(4));  // Addition de (1 à 4 max) msg par fil
+
+  // printf("%d\n", total_msg_fils(0)); // Tous les msg de tous les fils
   // return 0;
 
   if (argc < 2) {
@@ -876,6 +877,7 @@ int main(int argc, char** args) {
   affiche_connexion(adrclient);
   
   client_msg msg;
+  
   recv_client_msg(sockclient, &msg);
 
   // Ajouter if msg != NULL ... car comme ça valgrind n'est pas content.

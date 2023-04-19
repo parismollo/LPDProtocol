@@ -1,9 +1,10 @@
 ## TODO
-
+- [ ] Vérifier si l'option qui renvoie une liste de billets fonctionne **CLIENT/SERVEUR**
+- [ ] Vérifier: On a une fonction recv_client_msg dans serveur. Qui fait un recv de DATALEN et DATA. Même quand on a pas besoin ?
 
 ## Doing
 **Leopold**:
-- [ ] Demander la liste des **n** derniers billets (**SERVEUR**)
+- [x] Demander la liste des **n** derniers billets (**SERVEUR**).
 
 **Paris**:
 - [ ] Tester demander n derniers billets avec serveur prof **CLIENT**

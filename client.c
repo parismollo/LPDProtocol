@@ -104,7 +104,6 @@ int send_ticket(int sock, int numfil, char* text) {
     msg.NB = 0;
     msg.DATALEN = strlen(text);
     msg.DATA = text;
-
     if (query(sock, &msg) == 0) {
         client_msg msg; //TODO : pourquoi ?
         return server_notification_post(sock, &msg);
@@ -222,7 +221,7 @@ int process_ticket(int sock) {
   return 0;
 }
 
-int server_notification_get(int sock, client_msg * cmsg) {
+int server_notification_get(int sock, client_msg* cmsg) {
   // Handle first message
   if (sock < 0)
     return 1;
@@ -365,15 +364,14 @@ int main(int argc, char* argv[]) {
     if (connect(sock, (struct sockaddr *) &adrso, sizeof(adrso)) < 0) send_error(sock, "connect failed"); // 0 en cas de succès, -1 sinon
     
 
-    query_subscription(sock, "Paris");
+    // query_subscription(sock, "Paris");
     
-
-    send_ticket(sock, 0, "Hello World! This is another one");
-    // get_tickets(sock, 5, 5);
+    // send_ticket(sock, 0, "Hello World! This is another one");
+    get_tickets(sock, 1, 5);
 
     // RECEPTION MSG SERVEUR
-    char bufrecv[SIZE_MESS+1];
-    memset(bufrecv, 0, SIZE_MESS+1);
+    // char bufrecv[SIZE_MESS+1];
+    // memset(bufrecv, 0, SIZE_MESS+1);
     
     // int n = -1;
 
