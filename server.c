@@ -78,6 +78,7 @@ int recv_client_subscription(int sockclient, client_msg* cmsg) {
   int n = recv(sockclient, pseudo, 10, 0);
   if (n < 0) {send_error(sockclient, "error recv");}
   pseudo[n] = '\0';
+
   char buffer[128];
   memset(buffer, 0, sizeof(buffer));
 
@@ -625,12 +626,110 @@ int list_tickets(int sockclient, client_msg* msg) {
   return 0;
 }
 
+int is_user_registered(int id) {
+  int fd = open(DATABASE, O_RDONLY);
+  if(fd < 0) {
+    perror("open in is_user_registered");
+    return -1;
+  }
+
+  char buffer[128];
+  memset(buffer, 0, sizeof(buffer));
+
+  while(read(fd, buffer, sizeof(buffer)) > 0) {
+    int current_id = atoi(strtok(buffer, " "));
+    if(current_id == id) {
+      close(fd);
+      return 1;
+    }
+    memset(buffer, 0, sizeof(buffer));
+  }
+
+  close(fd);
+  return 0;
+}
+
 int validate_and_exec_msg(int socket, client_msg* msg) {
   // This function validate and call the appropriate function according to the msg
   // check if message has a valid structure, check if id exists or not, etc
   // if codereq == ? then ...
   // etc..
-  return handle_ticket(socket, msg); //tmp
+  u_int8_t req = msg->CODEREQ;
+  if(req > 6 || req < 1){
+    send_error(socket, "le code de requete doit être entre 1 et 6");
+    return -1;
+  }
+  if(req != 1){//Verify that the user is regitered
+    if(!is_user_registered(msg->ID)){
+      send_error(socket, "veuillez-vous inscrire");
+      return -1;
+    }
+  }
+  if(req > 2){ //Verifie que le fil existe
+    if(msg->NUMFIL < 0 || msg->NUMFIL > nb_fils()){
+        send_error(socket, "Ce fil n'existe pas");
+        return -1;
+      }
+  }
+  char pseudo[11];
+ 
+  
+  switch(req){
+    case 1 :
+      memset(pseudo, 0, sizeof(pseudo));
+      int n = recv(socket, pseudo, 10, 0);
+      if (n < 0) {send_error(socket, "error recv");}
+        pseudo[n] = '\0';
+      clear_pseudo(pseudo);
+
+      // Vérification du pseudo
+      if (strlen(pseudo) == 0) {
+        send_error(socket, "Le pseudo est vide");
+        return -1;
+      }
+      // If pseudo is valid, call the appropriate function
+      return recv_client_subscription(socket, msg);
+
+    case 2 :
+      if(msg->NB != 0){
+        send_error(socket, "NB value must be 0");
+        return -1;
+      }
+      return handle_ticket(socket, msg);
+    
+    case 3 :
+      if(msg->DATALEN != 0 || strlen(msg->DATA) != 0){
+        send_error(socket, "DATALEN must be 0 and DATA must be empty");
+        return -1;
+      }
+      return list_tickets(socket, msg);
+
+    case 4 :
+      if(msg->NB != 0){
+        send_error(socket, "NB value must be 0");
+        return -1;
+      }
+      if(msg->DATALEN != 0 || strlen(msg->DATA) != 0){
+        send_error(socket, "DATALEN must be 0 and DATA must be empty");
+        return -1;
+      }
+      //TODO : return la fonction adequate 
+      break;
+
+    case 5 : 
+      if(msg->NB != 0){
+        send_error(socket, "NB value must be 0");
+        return -1;
+      }
+      //TODO : return la fonction adequate 
+      break;
+
+    case 6 :
+      //TODO : return la fonction adequate 
+      break;
+  }
+  send_error(socket, "issue in function validate_and_exec_msg");
+  return -1;
 }
 
 
@@ -641,7 +740,7 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
   uint16_t res;
   int recu = recv(sockclient, &res, sizeof(uint16_t), 0);
   if (recu <= 0){
-    perror("erreur lecture");
+    perror("erreur lecturex");
     return(1);
   }
   // Ici on va convertir en ordre du host et prendre les valeurs de codereq et id. Pour ID on a besoin de
@@ -659,7 +758,7 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
   }
   recu = recv(sockclient, &res, sizeof(uint16_t), 0);
   if (recu <= 0){
-    perror("erreur lecture");
+    perror("erreur lecturey");
     return 1;
   }
   cmsg->NUMFIL = ntohs(res);

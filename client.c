@@ -40,11 +40,7 @@ int send_error(int sock, char* msg) {
     exit(1);
 }
 
-// Permet d'envoyer une requête au serveur en utilisant une structure client_msg. 
-// Cette structure contient les informations nécessaires pour la requête 
-// (ID, numéro de fil, nombre de billets, etc.). 
-// La fonction combine le code de requête et l'ID du client dans un entier 16 bits et 
-// l'envoie au serveur, suivi des autres informations nécessaires.
+
 int server_notification_post(int sockclient, client_msg* cmsg) {
   if (sockclient < 0)
     return 1;
@@ -110,7 +106,7 @@ int send_ticket(int sock, int numfil, char* text) {
     msg.DATA = text;
 
     if (query(sock, &msg) == 0) {
-        client_msg msg;
+        client_msg msg; //TODO : pourquoi ?
         return server_notification_post(sock, &msg);
     }
     return 1;
@@ -196,11 +192,11 @@ int query_subscription(int sock, char* pseudo) {
 
 // Permet de récupérer un certain nombre de billets pour un numéro de fil donné. 
 // Elle crée une structure client_msg avec le code de requête 3 (récupération de billets), 
-// le numéro de fil et le nombre de billets demandés, 
+// le numéro de fil et le nombre de billets demandés,    
 // puis appelle la fonction query pour envoyer la requête au serveur.
 int process_ticket(int sock) {
   // read numfil
-  uint16_t numfil = ntohs(recv(sock, &numfil, sizeof(uint16_t), 0));
+  uint16_t numfil = ntohs(recv(sock, &numfil, sizeof(uint16_t), 0));  
   // read origine
   char origine[11];
   recv(sock, &origine, 10, 0);
@@ -285,7 +281,7 @@ int server_notification_get(int sock, client_msg * cmsg) {
 }
 
 
-int server_notification_abonnement(int sock, client_msg * cmsg) {
+int server_notification_abonnement(int sock, client_msg * cmsg) { //Pourquoi
   if (sock < 0)
     return 1;
   uint16_t res;
