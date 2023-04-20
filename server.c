@@ -134,7 +134,6 @@ int nb_msg_fil(int fil) {
   sprintf(buf, "fil%d/fil%d.txt", fil, fil);
   int fd = open(buf, O_RDONLY, 0666);
   if(fd < 0) {
-    perror("erreur ouverture fil");
     return 0;
   }
   goto_last_line(fd);
@@ -352,7 +351,7 @@ int get_fil_initiator(int fil, char* initiator, size_t buf_size) {
   sprintf(buffer, "fil%d/fil%d.txt", fil, fil);
   FILE* file = fopen(buffer, "r");
   if(file == NULL) {
-    perror("impossible d'ouvrir le fil");
+    // perror("impossible d'ouvrir le fil"); // impossible d'ouvrir le fil
     return 1;
   }
   if(fgets(buffer, 1024, file) != NULL) {
@@ -771,27 +770,30 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
   }
   cmsg->DATALEN = res;
 
-  /////// WARNING ////////////////
-  // Ici parfois il n'y pas besoin de faire de recv pour data et peut
-  // etre aussi pour datalen. A voir. TODO
-  // if... DATALEN...
-  cmsg->DATA = malloc(sizeof(char) * cmsg->DATALEN);
-  if(cmsg->DATA == NULL) {
-    perror("malloc");
-    return 1;
-  }
-  memset(cmsg->DATA, 0, cmsg->DATALEN);
-  recu = recv(sockclient, cmsg->DATA, cmsg->DATALEN, 0);
-  // printf("recu: %d", recu);
-  // printf("datalen: %d", cmsg->DATALEN);
-  if (recu != cmsg->DATALEN) {
-    return send_error(sockclient, "error DATALEN");
+  if(cmsg->DATALEN > 0) {
+    cmsg->DATA = malloc(cmsg->DATALEN+1);
+    if(cmsg->DATA == NULL) {
+      perror("malloc");
+      return 1;
+    }
+    memset(cmsg->DATA, 0, cmsg->DATALEN+1);
+    recu = recv(sockclient, cmsg->DATA, cmsg->DATALEN, 0);
+    // printf("recu: %d", recu);
+    // printf("datalen: %d", cmsg->DATALEN);
+    if (recu != cmsg->DATALEN) {
+      free(cmsg->DATA);
+      return send_error(sockclient, "error DATALEN");
+    }
   }
 
   // A decommenter pour tester list_tickets directement...
-  // list_tickets(sockclient, cmsg);
+  list_tickets(sockclient, cmsg);
 
-  validate_and_exec_msg(sockclient, cmsg);
+  // validate_and_exec_msg(sockclient, cmsg);
+
+  if(cmsg->DATA)
+    free(cmsg->DATA);
+
   return 0;
 }
 
