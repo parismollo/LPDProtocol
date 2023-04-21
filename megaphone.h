@@ -37,5 +37,6 @@ int nb_fils();
 int change_infos(char* key, char* new_value);
 int query(int sock, client_msg* msg);
 void replace_after(char* str, char target, char replace_char, size_t maxsize);
+int prefix(char* str, char* pre);
 
 #endif

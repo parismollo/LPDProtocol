@@ -48,10 +48,11 @@ int query(int sock, client_msg* msg) {
   tmp = htons(msg->NB);
   if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0) send_error(sock, "send failed");
 
-  if (msg->CODEREQ == 2) {
-    if (send(sock, &msg->DATALEN, sizeof(u_int8_t), 0) < 0) send_error(sock, "send failed");
+  if (send(sock, &msg->DATALEN, sizeof(u_int8_t), 0) < 0) send_error(sock, "send failed");
+
+  if(msg->DATALEN > 0)
     if (send(sock, msg->DATA, msg->DATALEN, 0) < 0) send_error(sock, "send failed");
-  }
+
   return 0;
 }
 
@@ -382,11 +383,6 @@ int total_msg_fils(uint8_t nb_msg_by_fil) {
   return sum;
 }
 
-// Vérifie si pre est bien préfix de str
-int prefix(char* str, char* pre) {
-    return strncmp(pre, str, strlen(pre)) == 0;
-}
-
 // Lit une ligne sans prendre le '\n'
 int readline(int fd, char* line, size_t buf_size) {
   char c;
@@ -451,6 +447,7 @@ int get_last_messages(int nb, int fil, message* messages) {
   if(current_pos == -1) {
     // On a lu le fichier entierement. 1ere ligne comprise
     // On doit donc ajouter cette 1ere ligne au compteur
+    lseek(fd, 0, SEEK_SET); // Important.
     num_lines++;
   }
 
@@ -467,12 +464,14 @@ int get_last_messages(int nb, int fil, message* messages) {
     memset(&messages[i], 0, sizeof(message));
     // On lit l'ID
     readline(fd, line, 1024); // GESTION ERREURS
-    if(!prefix(line, "ID:"))
+    if(!prefix(line, "ID:")) {
+      // printf("line %s\n", line);
       goto bad_file_format;
-    
+    }
     // On découpe la ligne en: [ID, 123, PSEUDO, leo]
     if((ptr = strtok(line, sep)) == NULL)
       goto bad_file_format;
+      
     for(j=1;j<4 && (ptr = strtok(NULL, sep)) != NULL;j++) {
       if(j == 1) // ID
         messages[i].ID = atoi(ptr);
@@ -481,6 +480,7 @@ int get_last_messages(int nb, int fil, message* messages) {
     }
     if(j != 4)
       goto bad_file_format;
+
     
     // On lit le message
     readline(fd, line, 1024); // GESTION ERREURS
@@ -501,18 +501,18 @@ int get_last_messages(int nb, int fil, message* messages) {
 
 int send_msg_ticket(int sockclient, uint16_t numfil, char* origine, message msg) {
   
+  printf("Server side numfil: %d\n", numfil);
   numfil = htons(numfil);
   if(send(sockclient, &numfil, sizeof(numfil), 0) < 0)
-    return send_error(sockclient, "send failed"); 
-
+    return send_error(sockclient, "send failed");
   // origine est sur 10 octets. 11 pour le '\0'
-  replace_after(origine, '\0', '#', 11); // On place des '#' pour combler à la fin
+  replace_after(origine, '\n', '#', 11); // On place des '#' pour combler à la fin
   replace_after(msg.pseudo, '\0', '#', 11); // De meme pour le pseudo
-
+  printf("Server side origine: %s\n", origine);
   // On envoie l'origine (pseudo createur du fil)
   if(send(sockclient, origine, 10, 0) < 0)
     return send_error(sockclient, "send failed"); 
-
+  printf("Server side pseudo: %s\n", msg.pseudo);
   // On envoie le pseudo de celui qui a envoye le msg
   if(send(sockclient, msg.pseudo, 10, 0) < 0)
     return send_error(sockclient, "send failed"); 
@@ -521,10 +521,12 @@ int send_msg_ticket(int sockclient, uint16_t numfil, char* origine, message msg)
   uint8_t data_len = (uint8_t) strlen(msg.text);
 
   // On envoie DATA_LEN
+  printf("Server side datalen: %d\n", data_len);
   if(send(sockclient, &data_len, sizeof(uint8_t), 0) < 0)
     return send_error(sockclient, "send failed"); 
 
   // On envoie le text du message (DATA)
+  printf("Server side data: %s\n", msg.text);
   if(send(sockclient, msg.text, data_len, 0) < 0)
     return send_error(sockclient, "send failed"); 
 
@@ -557,6 +559,7 @@ int list_tickets(int sockclient, client_msg* msg) {
   response.ID = msg->ID;
   response.CODEREQ = msg->CODEREQ;
   response.NUMFIL = msg->NUMFIL == 0 ? nb_fils() : msg->NUMFIL;
+
 
   if(msg->NUMFIL > 0) { // Correspond à un fil existant
     int nb_msg = nb_msg_fil(msg->NUMFIL);
@@ -593,7 +596,7 @@ int list_tickets(int sockclient, client_msg* msg) {
     if(msg->NB <= nb_msg && msg->NB != 0)
       nb_msg = msg->NB;
 
-    message* messages = malloc(sizeof(message) * msg->NB);
+    message* messages = malloc(sizeof(message) * nb_msg);
     if(messages == NULL) {
       // send error
       return -1;
@@ -605,8 +608,10 @@ int list_tickets(int sockclient, client_msg* msg) {
       return -1;
     }
 
-    for(int j=0;j<nb_msg;i++) {
-      if(send_msg_ticket(sockclient, i, initator, messages[i]) != 0) {
+    printf("NB MSG: %d\n", nb_msg);
+    for(int j=0;j<nb_msg;j++) {
+      // printf("x\n");*
+      if(send_msg_ticket(sockclient, i, initator, messages[j]) != 0) {
         // send error
         free(messages);
         return -1;
@@ -785,14 +790,14 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
       return send_error(sockclient, "error DATALEN");
     }
   }
-
+  // printf("Client sends to Server: CODEREQ: %d NUMFIL: %d DATALEN: %d DATA: %s\n", cmsg->CODEREQ, cmsg->NUMFIL, cmsg->DATALEN, cmsg->DATA);
   // A decommenter pour tester list_tickets directement...
-  list_tickets(sockclient, cmsg);
+  list_tickets(sockclient, cmsg);         
 
   // validate_and_exec_msg(sockclient, cmsg);
 
-  if(cmsg->DATA)
-    free(cmsg->DATA);
+  // if(cmsg != NULL)
+  //   free(cmsg->DATA);
 
   return 0;
 }
@@ -809,10 +814,12 @@ int main(int argc, char** args) {
 
   // TEST: get_last_messages
   // message mess[10];
-  // get_last_messages(6, 0, mess);
-  // for(int i=0;i<6;i++) {
+  // get_last_messages(1, 1, mess);
+  // for(int i=0;i<1;i++) {
   //   printf("%d %s %s\n", mess[i].ID, mess[i].pseudo, mess[i].text);
   // }
+
+  // return 0;
 
   // TEST: nb_msg_fil(fil)
   // printf("%d\n", nb_msg_fil(0));
@@ -876,10 +883,9 @@ int main(int argc, char** args) {
     exit(1);
   }	   
 
-  affiche_connexion(adrclient);
+  // affiche_connexion(adrclient);
   
   client_msg msg;
-  
   recv_client_msg(sockclient, &msg);
 
   // Ajouter if msg != NULL ... car comme ça valgrind n'est pas content.

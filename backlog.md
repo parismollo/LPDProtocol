@@ -1,16 +1,14 @@
 ## TODO
-- [ ] Vérifier si l'option qui renvoie une liste de billets fonctionne **CLIENT/SERVEUR**
-- [ ] Vérifier: On a une fonction recv_client_msg dans serveur. Qui fait un recv de DATALEN et DATA. Même quand on a pas besoin ?
+- [ ] Vérifier si l'option qui renvoie une liste de billets fonctionne **CLIENT/SERVEUR** sur lulu
 
 ## Doing
 **Leopold**:
-- [x] Demander la liste des **n** derniers billets (**SERVEUR**).
+
 
 **Paris**:
 - [ ] Tester demander n derniers billets avec serveur prof **CLIENT**
 - [ ] Tester abonner fils avec serveur prof **CLIENT**
-- [ ] Améliorer fonction query pour s'adapter à toutes possibilités
-
+- [ ] handle different queries (different codereqs) at main + let server always on 
 **Daniel**:
 - [x] Ajouter tout teste de verification avant valider msg du client (si codereq ok, si id existe, etc...)
 - [ ] faire feature "abonner fils" **SERVER**
@@ -43,5 +41,5 @@
 - [x] gérer reception de la requete: abonner au fils **CLIENT**
 - [x] Fonction total_msg_fils: utilise nb_fil(). Puis pour chaque fil, on appelle nb_msg_fil(fil) pour tout additionner
 - [x] Fonction change_infos(key, ..): modifie la valeur pour la clée key dans le fichier info.data (MACRO: INFOS). Comme dans getinfo, fgets pour avancer ligne par ligne, et faire strtok sur virgule, deuxième truc c'est la valeur. 
-
-
+- [x] Demander la liste des **n** derniers billets (**SERVEUR**).
+- [x] Vérifier: On a une fonction recv_client_msg dans serveur. Qui fait un recv de DATALEN et DATA. Même quand on a pas besoin ?

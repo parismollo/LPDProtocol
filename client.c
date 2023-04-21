@@ -47,7 +47,7 @@ int server_notification_post(int sockclient, client_msg* cmsg) {
   uint16_t res;
   int recu = recv(sockclient, &res, sizeof(uint16_t), 0);
   if (recu <= 0){
-    perror("erreur lecture");
+    perror("erreur lecture notif post");
     return(1);
   }
 
@@ -58,7 +58,7 @@ int server_notification_post(int sockclient, client_msg* cmsg) {
   recu = recv(sockclient, &res, sizeof(uint16_t), 0);
   
   if (recu <= 0){
-    perror("erreur lecture");
+    perror("erreur lecture notif post");
     return 1;
   }
   cmsg->NUMFIL = ntohs(res);
@@ -85,11 +85,12 @@ int server_notification_post(int sockclient, client_msg* cmsg) {
   memset(cmsg->DATA, 0, cmsg->DATALEN);
   recu = recv(sockclient, cmsg->DATA, cmsg->DATALEN, 0);
   if (recu != cmsg->DATALEN) {
+    free(cmsg->DATA);
     return send_error(sockclient, "error DATALEN");
   }
 
   printf("**Server notification**: CODEREQ: %d ID: %d NUMFIL: %d DATA: %s\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->DATA);
-
+  free(cmsg->DATA);
   return 0;
 }
 
@@ -131,7 +132,6 @@ int query(int sock, client_msg* msg) {
     if(msg->DATALEN > 0) {
       if (send(sock, msg->DATA, msg->DATALEN, 0) < 0) send_error(sock, "send failed");
     }
-
     return 0;
 }
 
@@ -192,29 +192,38 @@ int query_subscription(int sock, char* pseudo) {
 // puis appelle la fonction query pour envoyer la requête au serveur.
 int process_ticket(int sock) {
   // read numfil
-  uint16_t numfil = ntohs(recv(sock, &numfil, sizeof(uint16_t), 0));  
+  uint16_t numfil;
+  if(recv(sock, &numfil, sizeof(uint16_t), 0) == -1 ) {
+    return send_error(sock, "recv failed");
+  }
+  numfil = ntohs(numfil);
   // read origine
   char origine[11];
-  recv(sock, &origine, 10, 0);
+  if(recv(sock, &origine, 10, 0) == -1) return send_error(sock, "recv failed");
   origine[11] = '\0';
   clear_pseudo(origine);
   // read pseudo
   char pseudo[11];
-  recv(sock, &pseudo, 10, 0);
+  if(recv(sock, &pseudo, 10, 0) == -1) return send_error(sock, "recv failed");
   pseudo[11] = '\0';
   clear_pseudo(pseudo);
   // read datalen
-  uint8_t len = recv(sock, &len, sizeof(uint8_t), 0);
+  uint8_t len;
+  if(recv(sock, &len, sizeof(uint8_t), 0) == -1) {
+    return send_error(sock, "recv failed");
+  }
   // read data
-  char *data = malloc(sizeof(char) * len);
+  char *data = malloc(len+1);
   if (data == NULL) {
     // handle error
   }
-  memset(data, 0, len);
+  memset(data, 0, len+1);
   if(recv(sock, data, len, 0) <= 0) {
     // handle error
   }
-  printf("**Server Notification**: NUMFIL: %d PSEUDO: %s DATA: %s\n", numfil, pseudo, data);
+
+  printf("**Server Notification**: NUMFIL: %hu ORIGIN: %s PSEUDO: %s DATA: %s\n", numfil, origine, pseudo, data);
+  free(data);
   return 0;
 }
 
@@ -225,7 +234,7 @@ int server_notification_get(int sock, client_msg* cmsg) {
   uint16_t res;
   int recu = recv(sock, &res, sizeof(uint16_t), 0);
   if (recu <= 0){
-    perror("erreur lecture");
+    perror("erreur lecture notif get");
     return(1);
   }
 
@@ -236,7 +245,7 @@ int server_notification_get(int sock, client_msg* cmsg) {
   recu = recv(sock, &res, sizeof(uint16_t), 0);
   
   if (recu <= 0){
-    perror("erreur lecture");
+    perror("erreur lecture notif get");
     return 1;
   }
   cmsg->NUMFIL = ntohs(res);
@@ -250,29 +259,24 @@ int server_notification_get(int sock, client_msg* cmsg) {
   recu = recv(sock, &res, sizeof(uint8_t), 0);
   cmsg->DATALEN = res;
 
-//   if (recu <= 0){ No data here for server notification
-//     return send_error(sockclient, "xerror recv");
-//   }
-  
-  cmsg->DATA = malloc(sizeof(char) * cmsg->DATALEN);
-  if(cmsg->DATA == NULL) {
-    perror("malloc");
-    return 1;
+  if(cmsg->DATALEN > 0) {
+    cmsg->DATA = malloc(sizeof(char) * cmsg->DATALEN);
+    if(cmsg->DATA == NULL) {
+      perror("malloc");
+      return 1;
+    }
+    memset(cmsg->DATA, 0, cmsg->DATALEN);
+    recu = recv(sock, cmsg->DATA, cmsg->DATALEN, 0);
   }
-  memset(cmsg->DATA, 0, cmsg->DATALEN);
-  recu = recv(sock, cmsg->DATA, cmsg->DATALEN, 0);
-  
-  // if (recu != cmsg->DATALEN) { nothing here in this context
-  //   return send_error(sock, "error DATALEN");
-  // }
-
   printf("**Server notification**: CODEREQ: %d ID: %d NUMFIL: %d :  NB: %d\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->NB);
 
   // Handle next n messages
   for(int i=0; i<cmsg->NB; i++) {
     process_ticket(sock);
   }
-
+  if(cmsg->DATALEN>0) {
+    free(cmsg->DATA);
+  }
   return 0;
 }
 
@@ -283,7 +287,7 @@ int server_notification_abonnement(int sock, client_msg * cmsg) { //Pourquoi
   uint16_t res;
   int recu = recv(sock, &res, sizeof(uint16_t), 0);
   if (recu <= 0){
-    perror("erreur lecture");
+    perror("erreur lecture notif abonnement");
     return(1);
   }
 
@@ -294,7 +298,7 @@ int server_notification_abonnement(int sock, client_msg * cmsg) { //Pourquoi
   recu = recv(sock, &res, sizeof(uint16_t), 0);
   
   if (recu <= 0){
-    perror("erreur lecture");
+    perror("erreur lecture notig abonnement");
     return 1;
   }
   cmsg->NUMFIL = ntohs(res);
@@ -349,26 +353,33 @@ int abonner_au_fil(int sock, int num_fil) {
 
 int main(int argc, char* argv[]) {
 
-    int sock = socket(PF_INET6, SOCK_STREAM, 0);
+  // char pseudo[11] = "daniel";
+  // printf("avant pseudo: %s\n", pseudo);
+  // replace_after(pseudo, '\0', '#', 11);
+  // printf("pseudo: %s\n", pseudo);
 
-    struct sockaddr_in6 adrso;
-    memset(&adrso, 0, sizeof(adrso)); // On remplit de 0 la structure (important)
-    adrso.sin6_family = AF_INET6;
-    // On met le port de dict
-    adrso.sin6_port = htons(PORT); // Convertir le port en big-endian
+  // return 0;
+
+  int sock = socket(PF_INET6, SOCK_STREAM, 0);
+
+  struct sockaddr_in6 adrso;
+  memset(&adrso, 0, sizeof(adrso)); // On remplit de 0 la structure (important)
+  adrso.sin6_family = AF_INET6;
+  // On met le port de dict
+  adrso.sin6_port = htons(PORT); // Convertir le port en big-endian
+  
+  inet_pton(AF_INET6, IP_SERVER, &adrso.sin6_addr); // On écrit l'ip dans adrso.sin_addr
+  if (connect(sock, (struct sockaddr *) &adrso, sizeof(adrso)) < 0) send_error(sock, "connect failed"); // 0 en cas de succès, -1 sinon
+  
+  if(!check_subscription()) {
+      query_subscription(sock, "Paris");
+      close(sock);
+      return EXIT_SUCCESS;
+  }
     
-    inet_pton(AF_INET6, IP_SERVER, &adrso.sin6_addr); // On écrit l'ip dans adrso.sin_addr
-    if (connect(sock, (struct sockaddr *) &adrso, sizeof(adrso)) < 0) send_error(sock, "connect failed"); // 0 en cas de succès, -1 sinon
     
-    if(!check_subscription()) {
-        query_subscription(sock, "Paris");
-        close(sock);
-        return EXIT_SUCCESS;
-    }
-    
-    
-    // send_ticket(sock, 2, "Hello World! This is another one");
-    get_tickets(sock, 1, 5);
+  // send_ticket(sock, 0, "New fil and ticket");
+  get_tickets(sock, 1, 0);
 
     // RECEPTION MSG SERVEUR
     // char bufrecv[SIZE_MESS+1];
@@ -389,6 +400,6 @@ int main(int argc, char* argv[]) {
     // printf("MSG string: %s\n", bufrecv);
 
     //*** fermeture de la socket ***
-    close(sock);
-    return EXIT_SUCCESS;
+  close(sock);
+  return EXIT_SUCCESS;
 }

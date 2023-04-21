@@ -1,5 +1,10 @@
 #include "megaphone.h"
 
+// Vérifie si pre est bien préfix de str
+int prefix(char* str, char* pre) {
+    return strncmp(pre, str, strlen(pre)) == 0;
+}
+
 void clear_pseudo(char * pseudo){
     char* pos_hstg = strchr(pseudo, '#');
     if(pos_hstg == NULL)
