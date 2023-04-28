@@ -647,11 +647,48 @@ int is_user_registered(int id) {
   return 0;
 }
 
+
+//Fonction qui abonne l'utilisateur au fil
+int add_subscription(int id, int numfil){
+  char buffer[1024];
+  sprintf(buffer, "fil%d/subscription_fil_%d.txt", numfil, numfil);
+  FILE* file = fopen(buffer, "a");
+  if(file == NULL) {
+    return -1;
+  }
+  fprintf(file, "ID:%d\n", id);
+  fclose(file);
+  return 0;
+}
+
+int abonnement_fil(int sockclient, client_msg* msg){
+  //Suppr
+  printf("abonnement");
+
+  if(add_subscription(msg->ID, msg->NUMFIL) < 0)
+      return send_error(sockclient, "error: could not add subscription");
+  
+
+  // Confirmation de l'abonnement
+  client_msg response = {0};
+  response.ID = msg->ID;
+  response.CODEREQ = msg->CODEREQ;
+  response.NUMFIL = msg->NUMFIL;
+  response.NB = 0;
+  if(query(sockclient, &response) < 0) {
+    return send_error(sockclient, "error: could not confirm subscription");
+  }
+  return 0;
+}
+
 int validate_and_exec_msg(int socket, client_msg* msg) {
   // This function validate and call the appropriate function according to the msg
   // check if message has a valid structure, check if id exists or not, etc
   // if codereq == ? then ...
   // etc..
+  //Suppr
+  printf("validate");
+
   u_int8_t req = msg->CODEREQ;
   if(req > 6 || req < 1) {
     send_error(socket, "le code de requete doit être entre 1 et 6");
@@ -662,12 +699,19 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
       send_error(socket, "veuillez-vous inscrire");
       return -1;
     }
+
   }
   if(req > 2) { // Verifie que le fil existe
     if(msg->NUMFIL < 0 || msg->NUMFIL > nb_fils()){
         send_error(socket, "Ce fil n'existe pas");
         return -1;
       }
+    if(req == 4 || req == 6){//Pour s'abonner ou télécharger, on ne peut pas donner le numéro de fil 0
+      if(msg->NUMFIL == 0){
+        send_error(socket, "Veuillez donner un numéro de fil valide");
+        return -1;
+      }
+    }
   }
   char pseudo[11];
  
@@ -710,8 +754,8 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
       if(msg->DATALEN != 0 || strlen(msg->DATA) != 0) {
         send_error(socket, "DATALEN must be 0 and DATA must be empty");
         return -1;
-      }
-      //TODO : return la fonction adequate 
+      } 
+      return abonnement_fil(socket, msg);
       break;
 
     case 5 : 
@@ -792,9 +836,9 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
   }
   // printf("Client sends to Server: CODEREQ: %d NUMFIL: %d DATALEN: %d DATA: %s\n", cmsg->CODEREQ, cmsg->NUMFIL, cmsg->DATALEN, cmsg->DATA);
   // A decommenter pour tester list_tickets directement...
-  list_tickets(sockclient, cmsg);         
+  //list_tickets(sockclient, cmsg);         
 
-  // validate_and_exec_msg(sockclient, cmsg);
+  validate_and_exec_msg(sockclient, cmsg);
 
   // if(cmsg != NULL)
   //   free(cmsg->DATA);
@@ -830,7 +874,6 @@ int main(int argc, char** args) {
 
   // printf("%d\n", total_msg_fils(0)); // Tous les msg de tous les fils
   // return 0;
-
   if (argc < 2) {
     fprintf(stderr, "Usage: %s <port>\n", args[0]);
     exit(1);

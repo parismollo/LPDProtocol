@@ -121,7 +121,7 @@ int query(int sock, client_msg* msg) {
     uint16_t res = ((uint16_t)msg->CODEREQ) | (msg->ID << 5);
     res = htons(res); 
     if (send(sock, &res, sizeof(res), 0) < 0) send_error(sock, "send failed"); 
-
+  
     u_int16_t tmp = htons(msg->NUMFIL);
     if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0) send_error(sock, "send failed"); 
 
@@ -337,18 +337,18 @@ int get_tickets(int sock, int num_fil, int nombre_billets) {
 // Permet de s'abonner à un fil de discussion en envoyant une requête avec le code 4 (abonnement à un fil) 
 // et le numéro de fil souhaité. Elle utilise également la fonction query pour envoyer la requête au serveur.
 int abonner_au_fil(int sock, int num_fil) {
+  client_msg msg;
+  msg.CODEREQ = 4;
+  msg.ID = ID;
+  msg.NUMFIL = num_fil;
+  msg.NB = 0;
+  msg.DATALEN = 0;
+  msg.DATA = "";
+  if (query(sock, &msg) == 0) {
     client_msg msg;
-    msg.CODEREQ = 4;
-    msg.ID = ID;
-    msg.NUMFIL = num_fil;
-    msg.NB = 0;
-    msg.DATALEN = 0;
-    msg.DATA = "";
-    if (query(sock, &msg) == 0) {
-      client_msg msg;
-      return server_notification_abonnement(sock, &msg);
-    }
-    return 1;
+    return server_notification_abonnement(sock, &msg);
+  }
+  return 1;
 }
 
 int main(int argc, char* argv[]) {
@@ -378,8 +378,9 @@ int main(int argc, char* argv[]) {
   }
     
     
-  // send_ticket(sock, 0, "New fil and ticket");
-  get_tickets(sock, 1, 0);
+  //send_ticket(sock, 0, "New fil and ticket");
+  abonner_au_fil(sock, 1);
+  // get_tickets(sock, 1, 0);
 
     // RECEPTION MSG SERVEUR
     // char bufrecv[SIZE_MESS+1];
