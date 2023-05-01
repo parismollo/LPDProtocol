@@ -234,7 +234,7 @@ int server_notification_get(int sock, client_msg* cmsg) {
   uint16_t res;
   int recu = recv(sock, &res, sizeof(uint16_t), 0);
   if (recu <= 0){
-    perror("erreur lecture notif get");
+    perror("erreur lecture notif getx");
     return(1);
   }
 
@@ -351,56 +351,71 @@ int abonner_au_fil(int sock, int num_fil) {
   return 1;
 }
 
+int cli(int sock) {
+  printf("Megaphone says: Hi user! What do you want to do?\n");
+  printf("(1) Inscription\n(2) Poster billet\n(3) Get billets\n(4) Abonner au fil\n(5) Close connection\n");
+  int num;
+  scanf("%d", &num);
+  switch (num)
+  {
+  case 1:
+    if(!check_subscription()) {
+      printf("Megaphone says: Type your username: \n");
+      char username[100];
+      scanf("%99s", username);
+      query_subscription(sock, username);
+      return 0;
+    }else {
+      printf("You already subscribed to megaphone\n");
+      return 1;
+    }
+  case 2:
+    check_subscription();
+    printf("Megaphone says: Type the numfil \n");
+    int numfil;
+    scanf("%d", &numfil);
+    printf("Megaphone says: Enter your message \n");
+    char data[100];
+    scanf(" %[^\n]", data);
+    data[99] = '\0';
+    return send_ticket(sock, numfil, data);
+  case 3:
+    check_subscription();
+   printf("Megaphone says: Type the numfil and the number of messages (e.g. 1 2) \n");
+   int a, b;
+   scanf("%d %d", &a, &b);
+   return get_tickets(sock, a, b);
+  case 4:
+    check_subscription();
+    printf("Megaphone says: Type the numfil \n");
+    int num;
+    scanf("%d", &num);
+    return abonner_au_fil(sock, 1);
+  case 5:
+    printf("Megaphone says: Closing connection...\n");
+    return -1;
+  default:
+    printf("Megaphone says: Nothing here so far...\n");
+    return -1;
+  }
+  return 0;
+}
+
+
 int main(int argc, char* argv[]) {
 
-  // char pseudo[11] = "daniel";
-  // printf("avant pseudo: %s\n", pseudo);
-  // replace_after(pseudo, '\0', '#', 11);
-  // printf("pseudo: %s\n", pseudo);
-
-  // return 0;
-
   int sock = socket(PF_INET6, SOCK_STREAM, 0);
-
   struct sockaddr_in6 adrso;
   memset(&adrso, 0, sizeof(adrso)); // On remplit de 0 la structure (important)
   adrso.sin6_family = AF_INET6;
-  // On met le port de dict
   adrso.sin6_port = htons(PORT); // Convertir le port en big-endian
   
   inet_pton(AF_INET6, IP_SERVER, &adrso.sin6_addr); // On écrit l'ip dans adrso.sin_addr
-  if (connect(sock, (struct sockaddr *) &adrso, sizeof(adrso)) < 0) send_error(sock, "connect failed"); // 0 en cas de succès, -1 sinon
-  
-  if(!check_subscription()) {
-      query_subscription(sock, "Paris");
-      close(sock);
-      return EXIT_SUCCESS;
-  }
-    
-    
-  //send_ticket(sock, 0, "New fil and ticket");
-  abonner_au_fil(sock, 1);
-  // get_tickets(sock, 1, 0);
-
-    // RECEPTION MSG SERVEUR
-    // char bufrecv[SIZE_MESS+1];
-    // memset(bufrecv, 0, SIZE_MESS+1);
-    
-    // int n = -1;
-
-    // if ((n = recv(sock, bufrecv, SIZE_MESS * sizeof(char), 0)) < 0) send_error(sock, "recv failed");
-    // printf("Taille msg recu: %d\n", n);
-    
-    // bufrecv[n] = '\0';
-
-    // printf("MSG hexa: ");
-    // for(int i=0;i<6;i++) {
-    //     printf("%4x ", bufrecv[i]);
-    // }
-    // puts("");
-    // printf("MSG string: %s\n", bufrecv);
-
-    //*** fermeture de la socket ***
+  if (connect(sock, (struct sockaddr *) &adrso, sizeof(adrso)) < 0) send_error(sock, "connect failed"); // 0 en cas de succès, -1 sinon  
+  // int loop = 1;
+  // while (loop != -1) {
+  cli(sock);
+  // }
   close(sock);
   return EXIT_SUCCESS;
 }

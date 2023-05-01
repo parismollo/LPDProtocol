@@ -501,18 +501,15 @@ int get_last_messages(int nb, int fil, message* messages) {
 
 int send_msg_ticket(int sockclient, uint16_t numfil, char* origine, message msg) {
   
-  printf("Server side numfil: %d\n", numfil);
   numfil = htons(numfil);
   if(send(sockclient, &numfil, sizeof(numfil), 0) < 0)
     return send_error(sockclient, "send failed");
   // origine est sur 10 octets. 11 pour le '\0'
   replace_after(origine, '\n', '#', 11); // On place des '#' pour combler à la fin
   replace_after(msg.pseudo, '\0', '#', 11); // De meme pour le pseudo
-  printf("Server side origine: %s\n", origine);
   // On envoie l'origine (pseudo createur du fil)
   if(send(sockclient, origine, 10, 0) < 0)
     return send_error(sockclient, "send failed"); 
-  printf("Server side pseudo: %s\n", msg.pseudo);
   // On envoie le pseudo de celui qui a envoye le msg
   if(send(sockclient, msg.pseudo, 10, 0) < 0)
     return send_error(sockclient, "send failed"); 
@@ -521,12 +518,10 @@ int send_msg_ticket(int sockclient, uint16_t numfil, char* origine, message msg)
   uint8_t data_len = (uint8_t) strlen(msg.text);
 
   // On envoie DATA_LEN
-  printf("Server side datalen: %d\n", data_len);
   if(send(sockclient, &data_len, sizeof(uint8_t), 0) < 0)
     return send_error(sockclient, "send failed"); 
 
   // On envoie le text du message (DATA)
-  printf("Server side data: %s\n", msg.text);
   if(send(sockclient, msg.text, data_len, 0) < 0)
     return send_error(sockclient, "send failed"); 
 
@@ -608,7 +603,7 @@ int list_tickets(int sockclient, client_msg* msg) {
       return -1;
     }
 
-    printf("NB MSG: %d\n", nb_msg);
+    // printf("NB MSG: %d\n", nb_msg);
     for(int j=0;j<nb_msg;j++) {
       // printf("x\n");*
       if(send_msg_ticket(sockclient, i, initator, messages[j]) != 0) {
@@ -682,12 +677,6 @@ int abonnement_fil(int sockclient, client_msg* msg){
 }
 
 int validate_and_exec_msg(int socket, client_msg* msg) {
-  // This function validate and call the appropriate function according to the msg
-  // check if message has a valid structure, check if id exists or not, etc
-  // if codereq == ? then ...
-  // etc..
-  //Suppr
-  printf("validate");
 
   u_int8_t req = msg->CODEREQ;
   if(req > 6 || req < 1) {
@@ -712,10 +701,10 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
         return -1;
       }
     }
+    if (req == 5) return -1;
   }
   char pseudo[11];
  
-  
   switch(req) {
     case 1 :
       memset(pseudo, 0, sizeof(pseudo));
@@ -740,10 +729,6 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
       return handle_ticket(socket, msg);
     
     case 3 :
-      if(msg->DATALEN != 0 || strlen(msg->DATA) != 0) {
-        send_error(socket, "DATALEN must be 0 and DATA must be empty");
-        return -1;
-      }
       return list_tickets(socket, msg);
 
     case 4 :
@@ -756,19 +741,6 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
         return -1;
       } 
       return abonnement_fil(socket, msg);
-      break;
-
-    case 5 : 
-      if(msg->NB != 0) {
-        send_error(socket, "NB value must be 0");
-        return -1;
-      }
-      //TODO : return la fonction adequate 
-      break;
-
-    case 6 :
-      //TODO : return la fonction adequate 
-      break;
   }
   send_error(socket, "issue in function validate_and_exec_msg");
   return -1;
@@ -781,7 +753,7 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
   //*** reception d'un message ***
   uint16_t res;
   int recu = recv(sockclient, &res, sizeof(uint16_t), 0);
-  if (recu <= 0) {
+  if (recu < 0) {
     perror("erreur lecture");
     return 1;
   }
@@ -794,13 +766,14 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
   // + vérifier que ID dépasse pas 11bits ?
   // printf("CODEREQ: %d ID: %d\n", cmsg->CODEREQ, cmsg->ID);
   if(cmsg->CODEREQ > 6) {
+    printf("%d", cmsg->CODEREQ);
     return send_error(sockclient, "CODEREQ too large");
   }
   else if(cmsg->CODEREQ == 1) { // INSCRIPTION
     return recv_client_subscription(sockclient, cmsg);
   }
   recu = recv(sockclient, &res, sizeof(uint16_t), 0);
-  if (recu <= 0) {
+  if (recu < 0) {
     perror("erreur lecture");
     return 1;
   }
@@ -834,46 +807,12 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
       return send_error(sockclient, "error DATALEN");
     }
   }
-  // printf("Client sends to Server: CODEREQ: %d NUMFIL: %d DATALEN: %d DATA: %s\n", cmsg->CODEREQ, cmsg->NUMFIL, cmsg->DATALEN, cmsg->DATA);
-  // A decommenter pour tester list_tickets directement...
-  //list_tickets(sockclient, cmsg);         
-
-  validate_and_exec_msg(sockclient, cmsg);
-
-  // if(cmsg != NULL)
-  //   free(cmsg->DATA);
-
-  return 0;
+        
+  return validate_and_exec_msg(sockclient, cmsg);
 }
 
 int main(int argc, char** args) {
 
-  // char infos[1024];
-  // get_infos("test", infos, sizeof(infos));
-  // printf("%s\n", infos);
-
-  // int nb = nb_fils();
-
-  // printf("nombre fils: %d\n", nb);
-
-  // TEST: get_last_messages
-  // message mess[10];
-  // get_last_messages(1, 1, mess);
-  // for(int i=0;i<1;i++) {
-  //   printf("%d %s %s\n", mess[i].ID, mess[i].pseudo, mess[i].text);
-  // }
-
-  // return 0;
-
-  // TEST: nb_msg_fil(fil)
-  // printf("%d\n", nb_msg_fil(0));
-
-  // change_infos("nb_fils", "52");
-
-  // printf("%d\n", total_msg_fils(4));  // Addition de (1 à 4 max) msg par fil
-
-  // printf("%d\n", total_msg_fils(0)); // Tous les msg de tous les fils
-  // return 0;
   if (argc < 2) {
     fprintf(stderr, "Usage: %s <port>\n", args[0]);
     exit(1);
@@ -920,25 +859,29 @@ int main(int argc, char** args) {
   struct sockaddr_in6 adrclient;
   memset(&adrclient, 0, sizeof(adrclient));
   socklen_t size = sizeof(adrclient);
-  int sockclient = accept(sock, (struct sockaddr *) &adrclient, &size);
-  if(sockclient == -1){
-    perror("probleme socket client");
-    exit(1);
-  }	   
-
-  // affiche_connexion(adrclient);
   
-  client_msg msg;
-  recv_client_msg(sockclient, &msg);
-
-  // Ajouter if msg != NULL ... car comme ça valgrind n'est pas content.
-  // if(msg.DATA)
-  //   free(msg.DATA);
-
-  //*** fermeture socket client ***
-  close(sockclient);
-  //*** fermeture socket serveur ***
+  while(1) {
+    int sockclient = accept(sock, (struct sockaddr *) &adrclient, &size);
+    if(sockclient == -1){
+      perror("probleme socket client");
+      exit(1);
+    }	   
+    // int loop = 1;
+    switch (fork()) {
+    case -1:
+      break;
+    case 0:
+      close(sock);
+      // int loop = 1;
+      // while(loop != -1) {
+      client_msg msg;
+      return recv_client_msg(sockclient, &msg);
+      // }
+    default:
+      close(sockclient);
+      while(waitpid(-1, NULL, WNOHANG) > 0);
+    }
+  }
   close(sock);
-  
   return 0;
 }

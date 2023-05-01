@@ -4,11 +4,8 @@
 ## Doing
 **Leopold**:
 
-
 **Paris**:
-- [ ] Tester demander n derniers billets avec serveur prof **CLIENT**
-- [ ] Tester abonner fils avec serveur prof **CLIENT**
-- [ ] handle different queries (different codereqs) at main + let server always on 
+
 **Daniel**:
 - [x] Ajouter tout teste de verification avant valider msg du client (si codereq ok, si id existe, etc...)
 - [ ] faire feature "abonner fils" **SERVER**
@@ -43,3 +40,8 @@
 - [x] Fonction change_infos(key, ..): modifie la valeur pour la clée key dans le fichier info.data (MACRO: INFOS). Comme dans getinfo, fgets pour avancer ligne par ligne, et faire strtok sur virgule, deuxième truc c'est la valeur. 
 - [x] Demander la liste des **n** derniers billets (**SERVEUR**).
 - [x] Vérifier: On a une fonction recv_client_msg dans serveur. Qui fait un recv de DATALEN et DATA. Même quand on a pas besoin ?
+- [x] server main
+  - [x] accept multiple clients
+- [x] client main
+  - [x] ask user what he wants to do.
+- [x] Fix minor bugs on validate_exec
