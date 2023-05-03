@@ -280,7 +280,6 @@ int server_notification_get(int sock, client_msg* cmsg) {
   return 0;
 }
 
-
 int server_notification_abonnement(int sock, client_msg * cmsg) { //Pourquoi
   if (sock < 0)
     return 1;
@@ -349,6 +348,147 @@ int abonner_au_fil(int sock, int num_fil) {
     return server_notification_abonnement(sock, &msg);
   }
   return 1;
+}
+
+int recv_server_query(int sock, client_msg* cmsg, int data) {
+  if (sock < 0)
+    return 1;
+  uint16_t res;
+  int recu = recv(sock, &res, sizeof(uint16_t), 0);
+  if (recu <= 0){
+    perror("erreur lecture");
+    return(1);
+  }
+
+  res = ntohs(res);
+  cmsg->CODEREQ = (res & 0x001F); // On mask avec 111110000..
+  if(cmsg->CODEREQ == 31) return 1; 
+  cmsg->ID = (res & 0xFFE0) >> 5;
+
+  recu = recv(sock, &res, sizeof(uint16_t), 0);
+  if (recu <= 0){
+    perror("erreur lecture");
+    return 1;
+  }
+  cmsg->NUMFIL = ntohs(res);
+  recu = recv(sock, &res, sizeof(uint16_t), 0);
+  
+  if (recu <= 0){
+    return send_error(sock, "error recv");
+  }
+  cmsg->NB = ntohs(res);
+
+  // Si on ne doit pas recevoir de data, on quitte la fonction
+  if(!data)
+    return 0;
+
+  recu = recv(sock, &res, sizeof(uint8_t), 0);
+  cmsg->DATALEN = res;
+
+  if(cmsg->DATALEN > 0) {
+    cmsg->DATA = malloc(sizeof(char) * cmsg->DATALEN);
+    if(cmsg->DATA == NULL) {
+      perror("malloc");
+      return 1;
+    }
+    memset(cmsg->DATA, 0, cmsg->DATALEN);
+    recu = recv(sock, cmsg->DATA, cmsg->DATALEN, 0);
+  }
+  printf("**Server notification**: CODEREQ: %d ID: %d NUMFIL: %d :  NB: %d\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->NB);
+
+  return 0;
+}
+
+int send_file(int sock, int num_fil, char* filename) {
+  client_msg msg;
+  msg.CODEREQ = 5;
+  msg.ID = ID;
+  msg.NUMFIL = num_fil;
+  msg.NB = 0;
+  msg.DATALEN = strlen(filename);
+  msg.DATA = filename;
+
+  if (query(sock, &msg) != 0)
+    return send_error(sock, "Error send query\n");
+
+  client_msg s_msg;
+  if(!recv_server_query(sock, &s_msg, 0))
+    return send_error(sock, "error recv from server\n");
+
+  if(!(s_msg.CODEREQ == msg.CODEREQ && s_msg.ID == msg.ID &&
+       s_msg.NUMFIL == num_fil)) {
+    return send_error(sock, "Wrong server answer\n");
+  }
+
+  // On récupère le port sur lequel on va envoyer les données
+  int udp_port = s_msg.NB;
+
+  // On crée le socket UDP
+  int sock_udp = socket(PF_INET6, SOCK_DGRAM, 0);
+  if (sock_udp < 0)
+    return send_error(sock, "Error creation sock udp");
+  
+  //adresse de destination
+  struct sockaddr_in6 servadr;
+  memset(&servadr, 0, sizeof(servadr));
+  servadr.sin6_family = AF_INET6;
+  inet_pton(AF_INET6, IP_SERVER, &servadr.sin6_addr);
+  servadr.sin6_port = udp_port;
+  socklen_t len = sizeof(servadr);
+
+  FILE* file = fopen(filename, "r");
+  if(file == NULL) {
+    close(sock_udp);
+    return send_error(sock, "error open file");
+  }
+
+  // Combine le codereq (5 bits de poids faible) avec l'ID (11 bits restants)
+  uint16_t codreq_id = ((uint16_t)msg.CODEREQ) | (msg.ID << 5);
+  codreq_id = htons(codreq_id);
+
+  char buf[513];
+  memset(buf, 0, 513);
+  uint16_t num_bloc = 1;
+  char* res = NULL;
+  while((res = fgets(buf, 512, file)) != NULL || num_bloc == 1) { // Si fichier vide, on rentre quand meme et on envoie un paquet vide
+    if (sendto(sock_udp, &codreq_id, sizeof(codreq_id), 0, (struct sockaddr *)&servadr, len) < 0) {
+      close(sock_udp);
+      return send_error(sock, "send failed");
+    }
+    if (sendto(sock_udp, &num_bloc, sizeof(num_bloc), 0, (struct sockaddr *)&servadr, len) < 0) {
+      close(sock_udp);
+      return send_error(sock, "send failed");
+    }
+    if(res != NULL) {
+      if (sendto(sock_udp, buf, strlen(buf), 0, (struct sockaddr *)&servadr, len) < 0) {
+        close(sock_udp);
+        return send_error(sock, "send failed");
+      }
+      memset(buf, 0, 513);
+    }
+    num_bloc++;
+  }
+  fclose(file);
+  close(sock_udp);
+
+  return 0;
+}
+
+int download_file(int sock, int num_fil, int num_port, char* filename) {
+  client_msg msg;
+  msg.CODEREQ = 6;
+  msg.ID = ID;
+  msg.NUMFIL = num_fil;
+  msg.NB = num_port;
+  msg.DATALEN = strlen(filename);
+  msg.DATA = filename;
+  if (query(sock, &msg) == 0) {
+      // TODO
+  }
+
+  // TODO
+
+  return 1; 
 }
 
 int cli(int sock) {
