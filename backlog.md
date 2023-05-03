@@ -2,12 +2,11 @@
 - [ ] Vérifier si l'option qui renvoie une liste de billets fonctionne **CLIENT/SERVEUR** sur lulu
 - [ ] download_file (client): fonction pour télécharger un fichier provenant d'un fil sur le server **CLIENT**
 - [ ] send_file (SERVEUR): fonction pour envoyer le fichier (correspondant a un certain fil) demandé au client **SERVEUR**
-- [ ] recv_file (SERVEUR): fonction pour récupérer un fichier envoyer par le client puis le stocker correspondant au fil sur le server **SERVEUR**
 
 ## Doing
 **Leopold**:
-- [x] send_file (client): fonction pour envoyer un fichier à un fil au serveur **CLIENT**
-- [ ] Vérifier que send_file fonctionne
+- [ ] send_file (client): fonction pour envoyer un fichier à un fil au serveur **CLIENT**
+- [ ] recv_file (SERVEUR): fonction pour récupérer un fichier envoyer par le client puis le stocker correspondant au fil sur le server **SERVEUR**
 
 **Paris**:
 

@@ -355,9 +355,9 @@ int recv_server_query(int sock, client_msg* cmsg, int data) {
     return 1;
   uint16_t res;
   int recu = recv(sock, &res, sizeof(uint16_t), 0);
-  if (recu <= 0){
-    perror("erreur lecture");
-    return(1);
+  if (recu <= 0) {
+    fprintf(stderr, "erreur lecture");
+    return 1;
   }
 
   res = ntohs(res);
@@ -366,8 +366,8 @@ int recv_server_query(int sock, client_msg* cmsg, int data) {
   cmsg->ID = (res & 0xFFE0) >> 5;
 
   recu = recv(sock, &res, sizeof(uint16_t), 0);
-  if (recu <= 0){
-    perror("erreur lecture");
+  if (recu <= 0) {
+    fprintf(stderr, "erreur lecture");
     return 1;
   }
   cmsg->NUMFIL = ntohs(res);
@@ -411,8 +411,9 @@ int send_file(int sock, int num_fil, char* filename) {
   if (query(sock, &msg) != 0)
     return send_error(sock, "Error send query\n");
 
+  //printf("**Server notification**: CODEREQ: %d ID: %d NUMFIL: %d DATA: %s\n", msg.CODEREQ, msg.ID, msg.NUMFIL, msg.DATA);
   client_msg s_msg;
-  if(!recv_server_query(sock, &s_msg, 0))
+  if(recv_server_query(sock, &s_msg, 0) != 0)
     return send_error(sock, "error recv from server\n");
 
   if(!(s_msg.CODEREQ == msg.CODEREQ && s_msg.ID == msg.ID &&
@@ -420,9 +421,12 @@ int send_file(int sock, int num_fil, char* filename) {
     return send_error(sock, "Wrong server answer\n");
   }
 
+  // On termine la connexion TCP avec le serveur
+  close(sock);
+
   // On récupère le port sur lequel on va envoyer les données
   int udp_port = s_msg.NB;
-
+  printf("PORT UDP: %d\n", udp_port);
   // On crée le socket UDP
   int sock_udp = socket(PF_INET6, SOCK_DGRAM, 0);
   if (sock_udp < 0)
@@ -446,20 +450,32 @@ int send_file(int sock, int num_fil, char* filename) {
   uint16_t codreq_id = ((uint16_t)msg.CODEREQ) | (msg.ID << 5);
   codreq_id = htons(codreq_id);
 
+  /* ////////////////////////////////////
+  
+    ENVOYER LES PAQUETS AVEC UN SEUL sendto !
+    Solution: faire un structure ? Qui contient ID/CODREQ, 
+    num_bloc, DATA. On envoie ensuite avec un unique sendto.
+
+  */ ////////////////////////////////////
+
   char buf[513];
   memset(buf, 0, 513);
-  uint16_t num_bloc = 1;
+  uint16_t num_bloc = 1, tmp;
   char* res = NULL;
   while((res = fgets(buf, 512, file)) != NULL || num_bloc == 1) { // Si fichier vide, on rentre quand meme et on envoie un paquet vide
+    printf("Envoie de codreq_id\n");
     if (sendto(sock_udp, &codreq_id, sizeof(codreq_id), 0, (struct sockaddr *)&servadr, len) < 0) {
       close(sock_udp);
       return send_error(sock, "send failed");
     }
-    if (sendto(sock_udp, &num_bloc, sizeof(num_bloc), 0, (struct sockaddr *)&servadr, len) < 0) {
+    printf("Envoie de numbloc: %d\n",num_bloc);
+    tmp = htons(num_bloc);
+    if (sendto(sock_udp, &tmp, sizeof(tmp), 0, (struct sockaddr *)&servadr, len) < 0) {
       close(sock_udp);
       return send_error(sock, "send failed");
     }
     if(res != NULL) {
+      printf("Envoie du buffer: %s\n", buf);
       if (sendto(sock_udp, buf, strlen(buf), 0, (struct sockaddr *)&servadr, len) < 0) {
         close(sock_udp);
         return send_error(sock, "send failed");
@@ -493,7 +509,7 @@ int download_file(int sock, int num_fil, int num_port, char* filename) {
 
 int cli(int sock) {
   printf("Megaphone says: Hi user! What do you want to do?\n");
-  printf("(1) Inscription\n(2) Poster billet\n(3) Get billets\n(4) Abonner au fil\n(5) Close connection\n");
+  printf("(1) Inscription\n(2) Poster billet\n(3) Get billets\n(4) Abonner au fil\n(5) Send file\n(6) Close connection\n");
   int num;
   scanf("%d", &num);
   switch (num)
@@ -521,10 +537,10 @@ int cli(int sock) {
     return send_ticket(sock, numfil, data);
   case 3:
     check_subscription();
-   printf("Megaphone says: Type the numfil and the number of messages (e.g. 1 2) \n");
-   int a, b;
-   scanf("%d %d", &a, &b);
-   return get_tickets(sock, a, b);
+    printf("Megaphone says: Type the numfil and the number of messages (e.g. 1 2) \n");
+    int a, b;
+    scanf("%d %d", &a, &b);
+    return get_tickets(sock, a, b);
   case 4:
     check_subscription();
     printf("Megaphone says: Type the numfil \n");
@@ -532,6 +548,14 @@ int cli(int sock) {
     scanf("%d", &num);
     return abonner_au_fil(sock, 1);
   case 5:
+    check_subscription();
+    char filename[255];
+    memset(filename, 0, 255);
+    printf("Nom du fichier a envoyer: ");
+    scanf("%s", filename);
+    printf("The filename is: %s\n", filename);
+    return send_file(sock, 1, filename);
+  case 6:
     printf("Megaphone says: Closing connection...\n");
     return -1;
   default:
