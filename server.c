@@ -704,6 +704,63 @@ int abonnement_fil(int sockclient, client_msg* msg){
   return 0;
 }
 
+int recv_client_file(int clientsock, client_msg* msg) {
+  // On garde CODREQ, ID et NUMFIL pareil
+  msg->NB = 33333; // Pour l'instant on prend ce port. Un jour il faudra vérifier si il n'est pas utilisé
+  msg->DATALEN = 0;
+  msg->DATA = NULL;
+
+  if(query(clientsock, msg) < 0) {
+    return send_error(clientsock, "error: cannot send msg in recv_client_file");
+  }
+
+  // On termine la connexion TCP avec le client
+  close(clientsock);
+
+  int sock_udp = socket(PF_INET6, SOCK_DGRAM, 0);
+  if (sock_udp < 0) {
+    perror("error creation socket udp");
+    return -1;
+  }
+  
+  // On utilise la variable globale avec l'adresse du dernier client
+  // On met notre port UDP
+  struct sockaddr_in6 address_sock;
+  memset(&address_sock, 0, sizeof(address_sock));
+  address_sock.sin6_family = AF_INET6;
+  address_sock.sin6_port = msg->NB; // Pas de htons ici pour bind !
+  address_sock.sin6_addr = in6addr_any;
+
+  printf("PORT:%d\n", address_sock.sin6_port);
+
+  if (bind(sock_udp, (struct sockaddr *)&address_sock, sizeof(address_sock)) < 0) {
+    perror("Error bind");
+    close(sock_udp);
+    return -1;
+  }
+
+  char buffer[513];
+  struct sockaddr_in6 cliadr;
+  socklen_t len = sizeof(cliadr);
+  
+  memset(buffer, 0, 513);
+  printf("AVANT RECVFROM\n");
+  int r = recvfrom(sock_udp, buffer, 512, 0, (struct sockaddr *)&cliadr, &len);
+  // Récupérer un seul paquet qui contient contient tout ! avec un seul recvfrom ?
+  printf("SORTIE RECVFROM\n");
+  // ATTENTION ICI, IL NE FAUT PAS ATTENDRE A L INFINI !
+  // TODO: mettre en place un timeout
+  if (r < 0) {
+    perror("error recvfrom");
+    close(sock_udp);
+    return -1;
+  }
+  printf("message recu - %d octets : %s\n", r, buffer);
+  close(sock_udp);
+
+  return 0;
+}
+
 int validate_and_exec_msg(int socket, client_msg* msg) {
 
   u_int8_t req = msg->CODEREQ;
@@ -729,7 +786,6 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
         return -1;
       }
     }
-    if (req == 5) return -1;
   }
   char pseudo[11];
  
@@ -767,13 +823,16 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
         return send_error(socket, "DATALEN must be 0");
       } 
       return abonnement_fil(socket, msg);
+    case 5:
+      printf("Reception d'un fichier client...\n");
+      return recv_client_file(socket, msg);
   }
   send_error(socket, "issue in function validate_and_exec_msg");
   return -1;
 }
 
 
-int recv_client_msg(int sockclient, client_msg* cmsg) {
+int recv_client_msg(int sockclient) {
   if (sockclient < 0)
     return 1;
   //*** reception d'un message ***
@@ -787,54 +846,55 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
   // Ici on va convertir en ordre du host et prendre les valeurs de codereq et id. Pour ID on a besoin de
   // les caler à nouveau 5 bits vers la droite, voir dessin pour mieux comprendre. (board.excalidraw)
   res = ntohs(res);
-  cmsg->CODEREQ = (res & 0x001F); // On mask avec 111110000..
-  cmsg->ID = (res & 0xFFE0) >> 5;
+
+  client_msg cmsg;
+  cmsg.CODEREQ = (res & 0x001F); // On mask avec 111110000..
+  cmsg.ID = (res & 0xFFE0) >> 5;
   // + vérifier que ID dépasse pas 11bits ?
-  // printf("CODEREQ: %d ID: %d\n", cmsg->CODEREQ, cmsg->ID);
-  if(cmsg->CODEREQ > 6) {
-    printf("%d", cmsg->CODEREQ);
+  // printf("CODEREQ: %d ID: %d\n", cmsg.CODEREQ, cmsg.ID);
+  if(cmsg.CODEREQ > 6) {
+    printf("%d", cmsg.CODEREQ);
     return send_error(sockclient, "CODEREQ too large");
   }
-  else if(cmsg->CODEREQ == 1) { // INSCRIPTION
-    return recv_client_subscription(sockclient, cmsg);
+  else if(cmsg.CODEREQ == 1) { // INSCRIPTION
+    return recv_client_subscription(sockclient, &cmsg);
   }
   recu = recv(sockclient, &res, sizeof(uint16_t), 0);
   if (recu < 0) {
     perror("erreur lecture");
     return 1;
   }
-  cmsg->NUMFIL = ntohs(res);
-  // Vérifier valeur NUMFIL?
+  cmsg.NUMFIL = ntohs(res);
 
   recu = recv(sockclient, &res, sizeof(uint16_t), 0);
   if (recu <= 0) {
     return send_error(sockclient, "error recv");
   }
-  cmsg->NB = ntohs(res);
-  // Vérifier valeur NUMFIL?
+  cmsg.NB = ntohs(res);
+  
   recu = recv(sockclient, &res, sizeof(uint8_t), 0);
   if (recu <= 0) {
     return send_error(sockclient, "error recv");
   }
-  cmsg->DATALEN = res;
+  cmsg.DATALEN = res;
 
-  if(cmsg->DATALEN > 0) {
-    cmsg->DATA = malloc(cmsg->DATALEN+1);
-    if(cmsg->DATA == NULL) {
+  if(cmsg.DATALEN > 0) {
+    cmsg.DATA = malloc(cmsg.DATALEN+1);
+    if(cmsg.DATA == NULL) {
       perror("malloc");
       return 1;
     }
-    memset(cmsg->DATA, 0, cmsg->DATALEN+1);
-    recu = recv(sockclient, cmsg->DATA, cmsg->DATALEN, 0);
-    // printf("recu: %d", recu);
-    // printf("datalen: %d", cmsg->DATALEN);
-    if (recu != cmsg->DATALEN) {
-      free(cmsg->DATA);
+    memset(cmsg.DATA, 0, cmsg.DATALEN+1);
+    recu = recv(sockclient, cmsg.DATA, cmsg.DATALEN, 0);
+    if (recu != cmsg.DATALEN) {
+      free(cmsg.DATA);
       return send_error(sockclient, "error DATALEN");
     }
   }
-        
-  return validate_and_exec_msg(sockclient, cmsg);
+    
+  // printf("**Client notification**: CODEREQ: %d ID: %d NUMFIL: %d :  NB: %d DATALEN: %d, DATA: %s\n", cmsg.CODEREQ, cmsg.ID, cmsg.NUMFIL, cmsg.NB, cmsg.DATALEN, cmsg.DATA);
+
+  return validate_and_exec_msg(sockclient, &cmsg);
 }
 
 int main(int argc, char** args) {
@@ -850,7 +910,7 @@ int main(int argc, char** args) {
     perror("creation socket");
     exit(1);
   }
-
+  
   //*** creation de l'adresse du destinataire (serveur) ***
   struct sockaddr_in6 address_sock;
   memset(&address_sock, 0, sizeof(address_sock));
@@ -881,28 +941,23 @@ int main(int argc, char** args) {
     exit(2);
   }
 
-  //*** le serveur accepte une connexion et cree la socket de communication avec le client ***
-  struct sockaddr_in6 adrclient;
-  memset(&adrclient, 0, sizeof(adrclient));
-  socklen_t size = sizeof(adrclient);
-  
+  struct sockaddr_in6 client_addr;
+  socklen_t len;
+
   while(1) {
-    int sockclient = accept(sock, (struct sockaddr *) &adrclient, &size);
+      //*** le serveur accepte une connexion et cree la socket de communication avec le client ***
+    int sockclient = accept(sock, (struct sockaddr *) &client_addr, &len);
     if(sockclient == -1){
       perror("probleme socket client");
       exit(1);
-    }	   
-    // int loop = 1;
+    }
+
     switch (fork()) {
     case -1:
       break;
     case 0:
       close(sock);
-      // int loop = 1;
-      // while(loop != -1) {
-      client_msg msg;
-      return recv_client_msg(sockclient, &msg);
-      // }
+      return recv_client_msg(sockclient);
     default:
       close(sockclient);
       while(waitpid(-1, NULL, WNOHANG) > 0);

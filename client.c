@@ -368,9 +368,166 @@ int abonner_au_fil(int sock, int num_fil) {
   return 1;
 }
 
+int recv_server_query(int sock, client_msg* cmsg, int data) {
+  if (sock < 0)
+    return 1;
+  uint16_t res;
+  int recu = recv(sock, &res, sizeof(uint16_t), 0);
+  if (recu <= 0) {
+    fprintf(stderr, "erreur lecture");
+    return 1;
+  }
+
+  res = ntohs(res);
+  cmsg->CODEREQ = (res & 0x001F); // On mask avec 111110000..
+  if(cmsg->CODEREQ == 31) return 1; 
+  cmsg->ID = (res & 0xFFE0) >> 5;
+
+  recu = recv(sock, &res, sizeof(uint16_t), 0);
+  if (recu <= 0) {
+    fprintf(stderr, "erreur lecture");
+    return 1;
+  }
+  cmsg->NUMFIL = ntohs(res);
+  recu = recv(sock, &res, sizeof(uint16_t), 0);
+  
+  if (recu <= 0){
+    return send_error(sock, "error recv");
+  }
+  cmsg->NB = ntohs(res);
+
+  // Si on ne doit pas recevoir de data, on quitte la fonction
+  if(!data)
+    return 0;
+
+  recu = recv(sock, &res, sizeof(uint8_t), 0);
+  cmsg->DATALEN = res;
+
+  if(cmsg->DATALEN > 0) {
+    cmsg->DATA = malloc(sizeof(char) * cmsg->DATALEN);
+    if(cmsg->DATA == NULL) {
+      perror("malloc");
+      return 1;
+    }
+    memset(cmsg->DATA, 0, cmsg->DATALEN);
+    recu = recv(sock, cmsg->DATA, cmsg->DATALEN, 0);
+  }
+  printf("**Server notification**: CODEREQ: %d ID: %d NUMFIL: %d :  NB: %d\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->NB);
+
+  return 0;
+}
+
+int send_file(int sock, int num_fil, char* filename) {
+  client_msg msg;
+  msg.CODEREQ = 5;
+  msg.ID = ID;
+  msg.NUMFIL = num_fil;
+  msg.NB = 0;
+  msg.DATALEN = strlen(filename);
+  msg.DATA = filename;
+
+  if (query(sock, &msg) != 0)
+    return send_error(sock, "Error send query\n");
+
+  //printf("**Server notification**: CODEREQ: %d ID: %d NUMFIL: %d DATA: %s\n", msg.CODEREQ, msg.ID, msg.NUMFIL, msg.DATA);
+  client_msg s_msg;
+  if(recv_server_query(sock, &s_msg, 0) != 0)
+    return send_error(sock, "error recv from server\n");
+
+  if(!(s_msg.CODEREQ == msg.CODEREQ && s_msg.ID == msg.ID &&
+       s_msg.NUMFIL == num_fil)) {
+    return send_error(sock, "Wrong server answer\n");
+  }
+
+  // On termine la connexion TCP avec le serveur
+  close(sock);
+
+  // On récupère le port sur lequel on va envoyer les données
+  int udp_port = s_msg.NB;
+  printf("PORT UDP: %d\n", udp_port);
+  // On crée le socket UDP
+  int sock_udp = socket(PF_INET6, SOCK_DGRAM, 0);
+  if (sock_udp < 0)
+    return send_error(sock, "Error creation sock udp");
+  
+  //adresse de destination
+  struct sockaddr_in6 servadr;
+  memset(&servadr, 0, sizeof(servadr));
+  servadr.sin6_family = AF_INET6;
+  inet_pton(AF_INET6, IP_SERVER, &servadr.sin6_addr);
+  servadr.sin6_port = udp_port;
+  socklen_t len = sizeof(servadr);
+
+  FILE* file = fopen(filename, "r");
+  if(file == NULL) {
+    close(sock_udp);
+    return send_error(sock, "error open file");
+  }
+
+  // Combine le codereq (5 bits de poids faible) avec l'ID (11 bits restants)
+  uint16_t codreq_id = ((uint16_t)msg.CODEREQ) | (msg.ID << 5);
+  codreq_id = htons(codreq_id);
+
+  /* ////////////////////////////////////
+  
+    ENVOYER LES PAQUETS AVEC UN SEUL sendto !
+    Solution: faire un structure ? Qui contient ID/CODREQ, 
+    num_bloc, DATA. On envoie ensuite avec un unique sendto.
+
+  */ ////////////////////////////////////
+
+  char buf[513];
+  memset(buf, 0, 513);
+  uint16_t num_bloc = 1, tmp;
+  char* res = NULL;
+  while((res = fgets(buf, 512, file)) != NULL || num_bloc == 1) { // Si fichier vide, on rentre quand meme et on envoie un paquet vide
+    printf("Envoie de codreq_id\n");
+    if (sendto(sock_udp, &codreq_id, sizeof(codreq_id), 0, (struct sockaddr *)&servadr, len) < 0) {
+      close(sock_udp);
+      return send_error(sock, "send failed");
+    }
+    printf("Envoie de numbloc: %d\n",num_bloc);
+    tmp = htons(num_bloc);
+    if (sendto(sock_udp, &tmp, sizeof(tmp), 0, (struct sockaddr *)&servadr, len) < 0) {
+      close(sock_udp);
+      return send_error(sock, "send failed");
+    }
+    if(res != NULL) {
+      printf("Envoie du buffer: %s\n", buf);
+      if (sendto(sock_udp, buf, strlen(buf), 0, (struct sockaddr *)&servadr, len) < 0) {
+        close(sock_udp);
+        return send_error(sock, "send failed");
+      }
+      memset(buf, 0, 513);
+    }
+    num_bloc++;
+  }
+  fclose(file);
+  close(sock_udp);
+
+  return 0;
+}
+
+int download_file(int sock, int num_fil, int num_port, char* filename) {
+  client_msg msg;
+  msg.CODEREQ = 6;
+  msg.ID = ID;
+  msg.NUMFIL = num_fil;
+  msg.NB = num_port;
+  msg.DATALEN = strlen(filename);
+  msg.DATA = filename;
+  if (query(sock, &msg) == 0) {
+      // TODO
+  }
+
+  // TODO
+
+  return 1; 
+}
+
 int cli(int sock) {
-  printf("[Server response]: Hi user! What do you want to do?\n");
-  printf("(1) Inscription\n(2) Poster billet\n(3) Get billets\n(4) Abonner au fil\n(5) Close connection\n");
+  printf("Megaphone says: Hi user! What do you want to do?\n");
+  printf("(1) Inscription\n(2) Poster billet\n(3) Get billets\n(4) Abonner au fil\n(5) Send file\n(6) Close connection\n");
   int num;
   scanf("%d", &num);
   switch (num)
@@ -409,7 +566,15 @@ int cli(int sock) {
     scanf("%d", &num);
     return abonner_au_fil(sock, num);
   case 5:
-    printf("[Server response]: Closing connection...\n");
+    check_subscription();
+    char filename[255];
+    memset(filename, 0, 255);
+    printf("Nom du fichier a envoyer: ");
+    scanf("%s", filename);
+    printf("The filename is: %s\n", filename);
+    return send_file(sock, 1, filename);
+  case 6:
+    printf("Megaphone says: Closing connection...\n");
     return -1;
   default:
     printf("[Server response]: Nothing here so far...\n");

@@ -20,9 +20,13 @@ Megaphone says: Type the numfil and the number of messages (e.g. 1 2)
 paris@paris-pc:~/Documents/UniversiteParis/L3S6/PR6/megaphone_pr6$ 
 
 ```
+- [ ] download_file (client): fonction pour télécharger un fichier provenant d'un fil sur le server **CLIENT**
+- [ ] send_file (SERVEUR): fonction pour envoyer le fichier (correspondant a un certain fil) demandé au client **SERVEUR**
 
 ## Doing
 **Leopold**:
+- [ ] send_file (client): fonction pour envoyer un fichier à un fil au serveur **CLIENT**
+- [ ] recv_file (SERVEUR): fonction pour récupérer un fichier envoyer par le client puis le stocker correspondant au fil sur le server **SERVEUR**
 
 **Paris**:
 - [ ] Multicast implementation
