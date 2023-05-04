@@ -53,6 +53,9 @@ int query(int sock, client_msg* msg) {
   if(msg->DATALEN > 0)
     if (send(sock, msg->DATA, msg->DATALEN, 0) < 0) send_error(sock, "send failed");
 
+  if(msg->CODEREQ == 4) {
+    if(send(sock, msg->multicast_addr, 16,0)<0) send_error(sock, "send failed"); 
+  }
   return 0;
 }
 
@@ -631,6 +634,7 @@ int is_user_registered(int id) {
 
   while(read(fd, buffer, sizeof(buffer)) > 0) {
     int current_id = atoi(strtok(buffer, " "));
+    // printf("current id: %d\n", current_id);
     if(current_id == id) {
       close(fd);
       return 1;
@@ -642,34 +646,58 @@ int is_user_registered(int id) {
   return 0;
 }
 
-
-//Fonction qui abonne l'utilisateur au fil
-int add_subscription(int id, int numfil){
-  char buffer[1024];
-  sprintf(buffer, "fil%d/subscription_fil_%d.txt", numfil, numfil);
-  FILE* file = fopen(buffer, "a");
-  if(file == NULL) {
-    return -1;
-  }
-  fprintf(file, "ID:%d\n", id);
-  fclose(file);
-  return 0;
+char * generate_multicast_address_ipv6(int group_id) {
+    char* multicast_address = malloc(40); 
+    uint8_t prefix[] = {0xff, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    prefix[11] = group_id;
+    inet_ntop(AF_INET6, prefix, multicast_address, 40);
+    return multicast_address;
 }
 
-int abonnement_fil(int sockclient, client_msg* msg){
-  //Suppr
-  printf("abonnement");
+char * get_multicast_address(int numfil){
+  // printf("here\n");
+  char buffer[256];
+  sprintf(buffer, "fil%d/multicast_address_fil_%d.txt", numfil, numfil);
+  // fprintf("buffer file name: %s\n", buffer);
+  struct stat st;
+  if (stat(buffer, &st) == 0) { // file exists
+    char* address = malloc(40);
+    FILE* file = fopen(buffer, "r");
+    if (file == NULL) {
+      return NULL;
+    }
+    if(fgets(address, 40, file) != NULL) {
+      fclose(file);
+      return address;
+    }
+    fclose(file);
+    free(address);
+  } // file does not exist
+  // printf("herex\n");
+  char* address = generate_multicast_address_ipv6(numfil);
+  printf("%ld\n", strlen(address));
+  // printf("%s\n", address);
+  FILE* file = fopen(buffer, "w");
+  if(file == NULL) return NULL;
+  fprintf(file, "%s", address);
+  fclose(file);
+  return address;
+}
 
-  if(add_subscription(msg->ID, msg->NUMFIL) < 0)
+
+
+int abonnement_fil(int sockclient, client_msg* msg){
+  char * multicast_addr;
+  if((multicast_addr = get_multicast_address(msg->NUMFIL)) == NULL) 
       return send_error(sockclient, "error: could not add subscription");
   
-
   // Confirmation de l'abonnement
   client_msg response = {0};
   response.ID = msg->ID;
-  response.CODEREQ = msg->CODEREQ;
+  response.CODEREQ = 4;
   response.NUMFIL = msg->NUMFIL;
   response.NB = 0;
+  inet_pton(AF_INET6, multicast_addr, response.multicast_addr);
   if(query(sockclient, &response) < 0) {
     return send_error(sockclient, "error: could not confirm subscription");
   }
@@ -733,12 +761,10 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
 
     case 4 :
       if(msg->NB != 0) {
-        send_error(socket, "NB value must be 0");
-        return -1;
+        return send_error(socket, "NB value must be 0");
       }
-      if(msg->DATALEN != 0 || strlen(msg->DATA) != 0) {
-        send_error(socket, "DATALEN must be 0 and DATA must be empty");
-        return -1;
+      if(msg->DATALEN != 0) {
+        return send_error(socket, "DATALEN must be 0");
       } 
       return abonnement_fil(socket, msg);
   }
@@ -813,8 +839,8 @@ int recv_client_msg(int sockclient, client_msg* cmsg) {
 
 int main(int argc, char** args) {
 
-  if (argc < 2) {
-    fprintf(stderr, "Usage: %s <port>\n", args[0]);
+  if (argc < 3) {
+    fprintf(stderr, "Usage: %s <port> <multicast port>\n", args[0]);
     exit(1);
   }
   

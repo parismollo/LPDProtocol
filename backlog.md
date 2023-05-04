@@ -1,14 +1,39 @@
 ## TODO
 - [ ] Vérifier si l'option qui renvoie une liste de billets fonctionne **CLIENT/SERVEUR** sur lulu
+- [ ] Fix CODEREQ too large. Context: When user tries to subscribe but is already, CODEREQ too large error is raised in the server side.
+- [ ] Bug - if more than one user creates an account (inscription) for some reason it does not work
+- [ ] Bug - affichage pas bon dans list tickets (--> �)
+
+```bash
+paris@paris-pc:~/Documents/UniversiteParis/L3S6/PR6/megaphone_pr6$ ./client 
+Megaphone says: Hi user! What do you want to do?
+(1) Inscription
+(2) Poster billet
+(3) Get billets
+(4) Abonner au fil
+(5) Close connection
+3
+Megaphone says: Type the numfil and the number of messages (e.g. 1 2) 
+1 0
+**Server notification**: CODEREQ: 3 ID: 1 NUMFIL: 1 :  NB: 1 
+**Server Notification**: NUMFIL: 1 ORIGIN: parismollo�parismollo PSEUDO: parismollo DATA: Hello World 
+paris@paris-pc:~/Documents/UniversiteParis/L3S6/PR6/megaphone_pr6$ 
+
+```
 
 ## Doing
 **Leopold**:
 
 **Paris**:
+- [ ] Multicast implementation
+  - [x] Server assign address to fil, save it locally and send it back to client
+  - [x] Client save address locally
+  - [ ] Server send message in multicast address
+  - [ ] Client reads message in multicast address
+
 
 **Daniel**:
-- [x] Ajouter tout teste de verification avant valider msg du client (si codereq ok, si id existe, etc...)
-- [ ] faire feature "abonner fils" **SERVER**
+
 
 
 ## Done
@@ -45,3 +70,4 @@
 - [x] client main
   - [x] ask user what he wants to do.
 - [x] Fix minor bugs on validate_exec
+- [x] Ajouter tout teste de verification avant valider msg du client (si codereq ok, si id existe, etc...)

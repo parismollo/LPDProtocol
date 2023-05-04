@@ -13,6 +13,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <sys/wait.h>
+#include <net/if.h>
 
 
 // STRUCTURES
@@ -20,6 +21,7 @@ typedef struct {
   u_int8_t CODEREQ, ID, DATALEN;
   uint16_t NUMFIL, NB;
   char* DATA;
+  uint8_t multicast_addr[16];
 } client_msg;
 
 typedef struct {

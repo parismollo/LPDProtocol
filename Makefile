@@ -18,4 +18,5 @@ reset_database:
 	rm -rf client_id.data
 	rm -rf server_users.data
 	rm -rf infos.data
+	rm -rf address.data
 	rm -rf fil[0-9]*
