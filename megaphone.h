@@ -20,7 +20,7 @@
 typedef struct {
   u_int8_t CODEREQ, ID, DATALEN;
   uint16_t NUMFIL, NB;
-  char* DATA;
+  char* DATA; // Il faut remplacer par char DATA[256] !
   uint8_t multicast_addr[16];
 } client_msg;
 
@@ -29,6 +29,17 @@ typedef struct {
   char pseudo[11];
   char text[256];
 }message;
+
+typedef struct {
+  uint16_t codreq_id;
+  uint16_t num_bloc;
+  char data[513]; // 512 + 1 (pour '\0')
+}FilePacket;
+
+typedef struct Node {
+  FilePacket packet;
+  struct Node* next;
+} Node;
 
 // FUNCTIONS
 void clear_pseudo(char * pseudo);

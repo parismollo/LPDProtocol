@@ -77,7 +77,7 @@ int server_notification_post(int sockclient, client_msg* cmsg) {
 //   }
   
   cmsg->DATALEN = res;
-  cmsg->DATA = malloc(sizeof(char) * cmsg->DATALEN);
+  cmsg->DATA = malloc(sizeof(char) * cmsg->DATALEN); // TODO: A supprimer ! Pas besoin de malloc
   
   if(cmsg->DATA == NULL) {
     perror("malloc");
@@ -261,7 +261,7 @@ int server_notification_get(int sock, client_msg* cmsg) {
   cmsg->DATALEN = res;
 
   if(cmsg->DATALEN > 0) {
-    cmsg->DATA = malloc(sizeof(char) * cmsg->DATALEN);
+    cmsg->DATA = malloc(sizeof(char) * cmsg->DATALEN); // TODO: A supprimer ! Pas besoin de malloc
     if(cmsg->DATA == NULL) {
       perror("malloc");
       return 1;
@@ -404,7 +404,7 @@ int recv_server_query(int sock, client_msg* cmsg, int data) {
   cmsg->DATALEN = res;
 
   if(cmsg->DATALEN > 0) {
-    cmsg->DATA = malloc(sizeof(char) * cmsg->DATALEN);
+    cmsg->DATA = malloc(sizeof(char) * cmsg->DATALEN); // TODO: A supprimer ! Pas besoin de malloc
     if(cmsg->DATA == NULL) {
       perror("malloc");
       return 1;
@@ -464,44 +464,29 @@ int send_file(int sock, int num_fil, char* filename) {
     return send_error(sock, "error open file");
   }
 
+  FilePacket packet;
+  memset(&packet, 0, sizeof(packet));
   // Combine le codereq (5 bits de poids faible) avec l'ID (11 bits restants)
-  uint16_t codreq_id = ((uint16_t)msg.CODEREQ) | (msg.ID << 5);
-  codreq_id = htons(codreq_id);
+  packet.codreq_id = ((uint16_t)msg.CODEREQ) | (msg.ID << 5);
+  packet.codreq_id = htons(packet.codreq_id);
 
-  /* ////////////////////////////////////
-  
-    ENVOYER LES PAQUETS AVEC UN SEUL sendto !
-    Solution: faire un structure ? Qui contient ID/CODREQ, 
-    num_bloc, DATA. On envoie ensuite avec un unique sendto.
+  uint16_t num_bloc = 1;
+  int nb_read;
+  printf("**CLIENT** BEGIN TRANSMISSION FILE\n");
+  do {
+    memset(packet.data, 0, 513);
+    nb_read = fread(packet.data, sizeof(char), 512, file); // on lit 512 octets dans le fichier
+    packet.num_bloc = htons(num_bloc);
 
-  */ ////////////////////////////////////
-
-  char buf[513];
-  memset(buf, 0, 513);
-  uint16_t num_bloc = 1, tmp;
-  char* res = NULL;
-  while((res = fgets(buf, 512, file)) != NULL || num_bloc == 1) { // Si fichier vide, on rentre quand meme et on envoie un paquet vide
-    printf("Envoie de codreq_id\n");
-    if (sendto(sock_udp, &codreq_id, sizeof(codreq_id), 0, (struct sockaddr *)&servadr, len) < 0) {
+    printf("**CLIENT** SEND PACKET, SIZE: %d\n", nb_read);
+    if (sendto(sock_udp, &packet, sizeof(packet), 0, (struct sockaddr *)&servadr, len) < 0) {
       close(sock_udp);
       return send_error(sock, "send failed");
-    }
-    printf("Envoie de numbloc: %d\n",num_bloc);
-    tmp = htons(num_bloc);
-    if (sendto(sock_udp, &tmp, sizeof(tmp), 0, (struct sockaddr *)&servadr, len) < 0) {
-      close(sock_udp);
-      return send_error(sock, "send failed");
-    }
-    if(res != NULL) {
-      printf("Envoie du buffer: %s\n", buf);
-      if (sendto(sock_udp, buf, strlen(buf), 0, (struct sockaddr *)&servadr, len) < 0) {
-        close(sock_udp);
-        return send_error(sock, "send failed");
-      }
-      memset(buf, 0, 513);
     }
     num_bloc++;
-  }
+  } while(nb_read == 512);
+  printf("**CLIENT** END TRANSMISSION FILE\n");
+  
   fclose(file);
   close(sock_udp);
 
@@ -528,7 +513,7 @@ int download_file(int sock, int num_fil, int num_port, char* filename) {
 int cli(int sock) {
   printf("Megaphone says: Hi user! What do you want to do?\n");
   printf("(1) Inscription\n(2) Poster billet\n(3) Get billets\n(4) Abonner au fil\n(5) Send file\n(6) Close connection\n");
-  int num;
+  int num, numfil;
   scanf("%d", &num);
   switch (num)
   {
@@ -546,7 +531,6 @@ int cli(int sock) {
   case 2:
     check_subscription();
     printf("[Server response]: Type the numfil \n");
-    int numfil;
     scanf("%d", &numfil);
     printf("[Server response]: Enter your message \n");
     char data[100];
@@ -569,10 +553,11 @@ int cli(int sock) {
     check_subscription();
     char filename[255];
     memset(filename, 0, 255);
-    printf("Nom du fichier a envoyer: ");
+    printf("File : ");
     scanf("%s", filename);
-    printf("The filename is: %s\n", filename);
-    return send_file(sock, 1, filename);
+    printf("Fil number : ");
+    scanf("%d", &numfil);
+    return send_file(sock, numfil, filename);
   case 6:
     printf("Megaphone says: Closing connection...\n");
     return -1;

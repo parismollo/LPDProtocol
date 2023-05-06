@@ -14,9 +14,11 @@ void affiche_connexion(struct sockaddr_in6 adrclient){
 }
 
 int send_error(int sockclient, char* msg) {
+  fprintf(stderr, "%s\n", msg);
+
   if(sockclient < 0)
     return 1;
-  fprintf(stderr, "%s\n", msg);
+
   // On cree une entete avec CODEREQ=31
   // send()...
   uint16_t a = htons(31);
@@ -170,7 +172,10 @@ int notify_ticket_reception(int sock, u_int8_t CODEREQ, uint8_t ID, int NUMFIL) 
   return query(sock, &notification);
 }
 
-int handle_ticket(int socket, client_msg* msg) {
+// Permet de recupérer un message d'un client et de le publier sur un fil
+// Si notify vaut true, on renvoie un message au client pour confirmer
+// Sinon, on n'envoie pas de message de confirmation
+int handle_ticket(int socket, client_msg* msg, int notify) {
   // This function supposes that the msg has been validated
   char buf[100];
   int fd, n;
@@ -229,8 +234,14 @@ int handle_ticket(int socket, client_msg* msg) {
     close(fd);
     return -1;
   }
-  
-  return notify_ticket_reception(socket, msg->CODEREQ, msg->ID, msg->NUMFIL);
+  // On confirme la reception au client
+  if(notify)
+    return notify_ticket_reception(socket, msg->CODEREQ, msg->ID, msg->NUMFIL);
+
+  // Dans ce cas, on veut juste ecrire un message dans un fil
+  // Mais sans discuter avec un client. C'est le cas lorsqu'on poste un billet
+  // apres la reception d'un fichier
+  return 0;
 }
 
 // Enregistre le pseudo dans la variable pseudo
@@ -684,8 +695,6 @@ char * get_multicast_address(int numfil){
   return address;
 }
 
-
-
 int abonnement_fil(int sockclient, client_msg* msg){
   char * multicast_addr;
   if((multicast_addr = get_multicast_address(msg->NUMFIL)) == NULL) 
@@ -704,11 +713,60 @@ int abonnement_fil(int sockclient, client_msg* msg){
   return 0;
 }
 
+////////////////////////////////////
+// TELECHARGEMENT/ENVOIE FICHIERS //
+////////////////////////////////////
+
+// Fonction pour insérer un nouveau packet dans la liste chaînée triée
+void insert_packet_sorted(Node** head, FilePacket packet) {
+  Node* new_node = malloc(sizeof(Node));
+  if(new_node == NULL) {
+    perror("error malloc");
+    return;
+  }
+  new_node->packet = packet;
+  new_node->next = NULL;
+  // Il n'y a pas de premier alors packet devient le head
+  // Sinon, si son numero est plus petit que le premier il devient egalement le head
+  if (*head == NULL || packet.num_bloc < (*head)->packet.num_bloc) {
+    new_node->next = *head;
+    *head = new_node;
+  }
+  else { // Si >= a numero de head. On se deplace pour l'inserer au bon endroit (voir tout a la fin)
+    Node* current = *head;
+    while (current->next != NULL && current->next->packet.num_bloc < packet.num_bloc) {
+      current = current->next;
+    }
+    new_node->next = current->next;
+    current->next = new_node;
+  }
+}
+
+// Fonction pour parcourir la liste chaînée triée et écrire les données dans le fichier
+void write_packets_to_file(Node* head, FILE* file) {
+  while (head != NULL) {
+    fwrite(head->packet.data, 1, strlen(head->packet.data), file);
+    head = head->next;
+  }
+}
+
+void free_list(Node* head) {
+  while (head != NULL) {
+    Node* current = head;
+    head = head->next;
+    free(current);
+  }
+}
+
 int recv_client_file(int clientsock, client_msg* msg) {
+  // On stocke le nom du fichier pour plus tard
+  char file_name[256];
+  memset(file_name, 0, 256);
+  strncpy(file_name, msg->DATA, msg->DATALEN);
+
   // On garde CODREQ, ID et NUMFIL pareil
   msg->NB = 33333; // Pour l'instant on prend ce port. Un jour il faudra vérifier si il n'est pas utilisé
   msg->DATALEN = 0;
-  msg->DATA = NULL;
 
   if(query(clientsock, msg) < 0) {
     return send_error(clientsock, "error: cannot send msg in recv_client_file");
@@ -739,24 +797,85 @@ int recv_client_file(int clientsock, client_msg* msg) {
     return -1;
   }
 
-  char buffer[513];
   struct sockaddr_in6 cliadr;
   socklen_t len = sizeof(cliadr);
-  
-  memset(buffer, 0, 513);
-  printf("AVANT RECVFROM\n");
-  int r = recvfrom(sock_udp, buffer, 512, 0, (struct sockaddr *)&cliadr, &len);
-  // Récupérer un seul paquet qui contient contient tout ! avec un seul recvfrom ?
-  printf("SORTIE RECVFROM\n");
-  // ATTENTION ICI, IL NE FAUT PAS ATTENDRE A L INFINI !
-  // TODO: mettre en place un timeout
-  if (r < 0) {
-    perror("error recvfrom");
-    close(sock_udp);
+
+  Node* packets_list = NULL;
+  FilePacket packet;
+  uint8_t codreq;
+  uint16_t id;
+  // On reçoit les packets du client et on les stocke dans une liste chainée
+  printf("**RECEPTION D'UN FICHIER**\n");
+  do {
+    memset(&packet, 0, sizeof(packet));
+    int recv_len = recvfrom(sock_udp, &packet, sizeof(packet), 0, (struct sockaddr *)&cliadr, &len); // Faire un timemout : #TODO
+    if (recv_len < 0) {
+      perror("Error recvfrom");
+      break;
+    }
+    if (recv_len == 0) {
+      // Fin de la transmission
+      printf("Fin de transmission.\n");
+      break;
+    }
+
+    packet.codreq_id = ntohs(packet.codreq_id);
+    packet.num_bloc = ntohs(packet.num_bloc);
+
+    codreq = (packet.codreq_id & 0x001F); // On mask avec 111110000..
+    id = (packet.codreq_id & 0xFFE0) >> 5;
+
+    // On skip les paquets qui ne viennent pas du bon destinataire
+    // Ou qui sont mal formatés
+    if(codreq != msg->CODEREQ || id != msg->ID) {
+      printf("Bad id or bad codreq. Skipping this packet...\n");
+      continue;
+    }
+
+    printf("**FilePacket** codreq_id:%d, num_bloc: %d et strlen(data): %ld\n", packet.codreq_id, packet.num_bloc, strlen(packet.data));
+
+    // On ajoute ce packet a la liste triée
+    insert_packet_sorted(&packets_list, packet);
+  } while(strlen(packet.data) == 512);
+  close(sock_udp);
+
+  printf("**FICHIER RECU**\n");
+
+  // On crée un "fake" message client pour pouvoir appeler la fonction handle_ticket
+  // Cela a pour but d'écrire le nom du fichier recu dans le fichier du fil
+  msg->NB = 0;
+  msg->DATALEN = strlen(file_name);
+
+  strncpy(msg->DATA, file_name, msg->DATALEN+1); // +1 pour copier aussi le '\0' et etre sur que tout va bien
+
+  if(handle_ticket(-1, msg, 0) != 0) {
+    fprintf(stderr, "error writing ticket in fil %d\n", msg->NUMFIL);
+    free_list(packets_list);
     return -1;
   }
-  printf("message recu - %d octets : %s\n", r, buffer);
-  close(sock_udp);
+
+  // On récupère le numéro du fil (si c'est un nouveau fil)
+  if(msg->NUMFIL == 0)
+    msg->NUMFIL = nb_fils(); // C'est le dernier fil dans ce cas (il vient d etre créer par handle ticket)
+  
+  char file_path[1024];
+  memset(file_path, 0, 1024);
+  sprintf(file_path, "fil%d/%s", msg->NUMFIL, file_name);
+
+  printf("ECRITURE DU FICHIER: %s\n", file_path);
+  // Écrire les données dans le fichier dans le bon ordre
+  FILE* file = fopen(file_path, "w");
+  if(file == NULL) {
+    fprintf(stderr, "error file creation\n");
+    free_list(packets_list);
+  }
+  // On écrit les paquets dans le fichier
+  write_packets_to_file(packets_list, file);
+  
+  // On ferme le fichier
+  fclose(file);
+  // On free la liste
+  free_list(packets_list);
 
   return 0;
 }
@@ -810,7 +929,7 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
         send_error(socket, "NB value must be 0");
         return -1;
       }
-      return handle_ticket(socket, msg);
+      return handle_ticket(socket, msg, 1);
     
     case 3 :
       return list_tickets(socket, msg);
@@ -853,7 +972,6 @@ int recv_client_msg(int sockclient) {
   // + vérifier que ID dépasse pas 11bits ?
   // printf("CODEREQ: %d ID: %d\n", cmsg.CODEREQ, cmsg.ID);
   if(cmsg.CODEREQ > 6) {
-    printf("%d", cmsg.CODEREQ);
     return send_error(sockclient, "CODEREQ too large");
   }
   else if(cmsg.CODEREQ == 1) { // INSCRIPTION
@@ -879,7 +997,7 @@ int recv_client_msg(int sockclient) {
   cmsg.DATALEN = res;
 
   if(cmsg.DATALEN > 0) {
-    cmsg.DATA = malloc(cmsg.DATALEN+1);
+    cmsg.DATA = malloc(cmsg.DATALEN+1); // TODO: A supprimer ! Pas besoin de malloc
     if(cmsg.DATA == NULL) {
       perror("malloc");
       return 1;
