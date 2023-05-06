@@ -77,21 +77,15 @@ int server_notification_post(int sockclient, client_msg* cmsg) {
 //   }
   
   cmsg->DATALEN = res;
-  cmsg->DATA = malloc(sizeof(char) * cmsg->DATALEN); // TODO: A supprimer ! Pas besoin de malloc
+  memset(cmsg->DATA, 0, 256);
   
-  if(cmsg->DATA == NULL) {
-    perror("malloc");
-    return 1;
-  }
-  memset(cmsg->DATA, 0, cmsg->DATALEN);
   recu = recv(sockclient, cmsg->DATA, cmsg->DATALEN, 0);
   if (recu != cmsg->DATALEN) {
-    free(cmsg->DATA);
     return send_error(sockclient, "error DATALEN");
   }
 
   printf("[Server response]: CODEREQ: %d ID: %d NUMFIL: %d DATA: %s\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->DATA);
-  free(cmsg->DATA);
+
   return 0;
 }
 
@@ -105,7 +99,8 @@ int send_ticket(int sock, int numfil, char* text) {
     msg.NUMFIL = numfil;
     msg.NB = 0;
     msg.DATALEN = strlen(text);
-    msg.DATA = text;
+    memset(msg.DATA, 0, 256);
+    strncpy(msg.DATA, text, strlen(text));
     if (query(sock, &msg) == 0) {
         client_msg msg; //TODO : pourquoi ?
         return server_notification_post(sock, &msg);
@@ -216,11 +211,12 @@ int process_ticket(int sock) {
   // read data
   char *data = malloc(len+1);
   if (data == NULL) {
-    // handle error
+    return send_error(sock, "malloc failed");
   }
   memset(data, 0, len+1);
   if(recv(sock, data, len, 0) <= 0) {
-    // handle error
+    free(data);
+    return send_error(sock, "recv failed");
   }
 
   printf("[Server response]: NUMFIL: %hu ORIGIN: %s PSEUDO: %s DATA: %s\n", numfil, origine, pseudo, data);
@@ -243,9 +239,9 @@ int server_notification_get(int sock, client_msg* cmsg) {
   cmsg->CODEREQ = (res & 0x001F); // On mask avec 111110000..
   if(cmsg->CODEREQ == 31) return 1; 
   cmsg->ID = (res & 0xFFE0) >> 5;
-  recu = recv(sock, &res, sizeof(uint16_t), 0);
+  recu = recv(sock, &res, sizeof(uint16_t), 0); 
   
-  if (recu <= 0){
+  if (recu <= 0) {
     perror("erreur lecture notif get");
     return 1;
   }
@@ -258,25 +254,26 @@ int server_notification_get(int sock, client_msg* cmsg) {
   cmsg->NB = ntohs(res);
   
   recu = recv(sock, &res, sizeof(uint8_t), 0);
+  if (recu <= 0) {
+    perror("erreur recv");
+    return 1;
+  }
   cmsg->DATALEN = res;
 
   if(cmsg->DATALEN > 0) {
-    cmsg->DATA = malloc(sizeof(char) * cmsg->DATALEN); // TODO: A supprimer ! Pas besoin de malloc
-    if(cmsg->DATA == NULL) {
-      perror("malloc");
+    memset(cmsg->DATA, 0, 256);
+
+    recu = recv(sock, cmsg->DATA, cmsg->DATALEN, 0);
+    if (recu <= 0) {
+      perror("erreur recv");
       return 1;
     }
-    memset(cmsg->DATA, 0, cmsg->DATALEN);
-    recu = recv(sock, cmsg->DATA, cmsg->DATALEN, 0);
   }
   printf("[Server response]: CODEREQ: %d ID: %d NUMFIL: %d :  NB: %d\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->NB);
 
   // Handle next n messages
   for(int i=0; i<cmsg->NB; i++) {
     process_ticket(sock);
-  }
-  if(cmsg->DATALEN>0) {
-    free(cmsg->DATA);
   }
   return 0;
 }
@@ -343,7 +340,7 @@ int get_tickets(int sock, int num_fil, int nombre_billets) {
     msg.NUMFIL = num_fil;
     msg.NB = nombre_billets;
     msg.DATALEN = 0;
-    msg.DATA = "";
+    memset(msg.DATA, 0, 256);
     if (query(sock, &msg) == 0) {
         client_msg msg;
         return server_notification_get(sock, &msg);
@@ -360,7 +357,7 @@ int abonner_au_fil(int sock, int num_fil) {
   msg.NUMFIL = num_fil;
   msg.NB = 0;
   msg.DATALEN = 0;
-  msg.DATA = "";
+  memset(msg.DATA, 0, 256);
   if (query(sock, &msg) == 0) {
     client_msg msg;
     return server_notification_abonnement(sock, &msg);
@@ -404,13 +401,12 @@ int recv_server_query(int sock, client_msg* cmsg, int data) {
   cmsg->DATALEN = res;
 
   if(cmsg->DATALEN > 0) {
-    cmsg->DATA = malloc(sizeof(char) * cmsg->DATALEN); // TODO: A supprimer ! Pas besoin de malloc
-    if(cmsg->DATA == NULL) {
-      perror("malloc");
+    memset(cmsg->DATA, 0, 256);
+    recu = recv(sock, cmsg->DATA, cmsg->DATALEN, 0);
+    if (recu <= 0) {
+      perror("erreur lecture notif get");
       return 1;
     }
-    memset(cmsg->DATA, 0, cmsg->DATALEN);
-    recu = recv(sock, cmsg->DATA, cmsg->DATALEN, 0);
   }
   printf("**Server notification**: CODEREQ: %d ID: %d NUMFIL: %d :  NB: %d\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->NB);
 
@@ -424,7 +420,8 @@ int send_file(int sock, int num_fil, char* filename) {
   msg.NUMFIL = num_fil;
   msg.NB = 0;
   msg.DATALEN = strlen(filename);
-  msg.DATA = filename;
+  memset(msg.DATA, 0, 256);
+  strncpy(msg.DATA, filename, strlen(filename));
 
   if (query(sock, &msg) != 0)
     return send_error(sock, "Error send query\n");
@@ -500,7 +497,9 @@ int download_file(int sock, int num_fil, int num_port, char* filename) {
   msg.NUMFIL = num_fil;
   msg.NB = num_port;
   msg.DATALEN = strlen(filename);
-  msg.DATA = filename;
+  memset(msg.DATA, 0, 256);
+  strncpy(msg.DATA, filename, msg.DATALEN);
+  
   if (query(sock, &msg) == 0) {
       // TODO
   }

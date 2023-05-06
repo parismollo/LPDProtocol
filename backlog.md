@@ -3,7 +3,6 @@
 - [ ] Fix CODEREQ too large. Context: When user tries to subscribe but is already, CODEREQ too large error is raised in the server side.
 - [ ] Bug - if more than one user creates an account (inscription) for some reason it does not work
 - [ ] Bug - affichage pas bon dans list tickets (--> �)
-- [ ] On connait la taille de DATA dans client_msg ! C'est 255 caractère + 1 ('\0') au maximum 256 donc. Car DATALEN est toujours codé sur 1 octet soit une valeur de 0 à 255 max ! Il faut donc remplacer char* DATA par char DATA[256] dans client_msg dans megaphone.h . Puis , partout où on fait msg->DATA = malloc... Il faut supprimer. J'ai mis des TODO devant
 - [ ] Organiser le code (si possible). Créer un dossier server et client. Mettre server.c dans server et client.c dans client. Decouper le code en plusieurs fichiers. Modifier le Makefile en conséquence
 
 ```bash
@@ -77,3 +76,4 @@ paris@paris-pc:~/Documents/UniversiteParis/L3S6/PR6/megaphone_pr6$
   - [x] ask user what he wants to do.
 - [x] Fix minor bugs on validate_exec
 - [x] Ajouter tout teste de verification avant valider msg du client (si codereq ok, si id existe, etc...)
+- [x] Changer DATA dans la structure client_msg. Mettre char DATA[256]. Modifier tout le code en conséquence

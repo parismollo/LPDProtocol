@@ -161,14 +161,16 @@ int nb_msg_fil(int fil) {
 int notify_ticket_reception(int sock, u_int8_t CODEREQ, uint8_t ID, int NUMFIL) {
   // Once ticket created successfully
   // notify client
+  char* ticket_created = "Ticket created";
   client_msg notification;
   memset(&notification, 0, sizeof(notification));
   notification.CODEREQ = CODEREQ;
   notification.ID = ID;
   notification.NUMFIL = NUMFIL;
   notification.NB = 0;
-  notification.DATA = "Ticket created"; //tmp
+  strncpy(notification.DATA, ticket_created, strlen(ticket_created));
   notification.DATALEN = strlen(notification.DATA);
+
   return query(sock, &notification);
 }
 
@@ -659,6 +661,11 @@ int is_user_registered(int id) {
 
 char * generate_multicast_address_ipv6(int group_id) {
     char* multicast_address = malloc(40); 
+    if(multicast_address == NULL) {
+      perror("error malloc");
+      return NULL;
+    }
+    memset(multicast_address, 0, 40);
     uint8_t prefix[] = {0xff, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
     prefix[11] = group_id;
     inet_ntop(AF_INET6, prefix, multicast_address, 40);
@@ -673,8 +680,13 @@ char * get_multicast_address(int numfil){
   struct stat st;
   if (stat(buffer, &st) == 0) { // file exists
     char* address = malloc(40);
+    if(address == NULL) {
+      return NULL;
+    }
+    memset(address, 0, 40);
     FILE* file = fopen(buffer, "r");
     if (file == NULL) {
+      free(address);
       return NULL;
     }
     if(fgets(address, 40, file) != NULL) {
@@ -708,8 +720,10 @@ int abonnement_fil(int sockclient, client_msg* msg){
   response.NB = 0;
   inet_pton(AF_INET6, multicast_addr, response.multicast_addr);
   if(query(sockclient, &response) < 0) {
+    free(multicast_addr);
     return send_error(sockclient, "error: could not confirm subscription");
   }
+  free(multicast_addr);
   return 0;
 }
 
@@ -997,15 +1011,9 @@ int recv_client_msg(int sockclient) {
   cmsg.DATALEN = res;
 
   if(cmsg.DATALEN > 0) {
-    cmsg.DATA = malloc(cmsg.DATALEN+1); // TODO: A supprimer ! Pas besoin de malloc
-    if(cmsg.DATA == NULL) {
-      perror("malloc");
-      return 1;
-    }
-    memset(cmsg.DATA, 0, cmsg.DATALEN+1);
+    memset(cmsg.DATA, 0, 256);
     recu = recv(sockclient, cmsg.DATA, cmsg.DATALEN, 0);
     if (recu != cmsg.DATALEN) {
-      free(cmsg.DATA);
       return send_error(sockclient, "error DATALEN");
     }
   }

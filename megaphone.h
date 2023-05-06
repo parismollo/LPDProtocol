@@ -20,7 +20,7 @@
 typedef struct {
   u_int8_t CODEREQ, ID, DATALEN;
   uint16_t NUMFIL, NB;
-  char* DATA; // Il faut remplacer par char DATA[256] !
+  char DATA[256]; // DATALEN codé sur 1 octet. Donc DATA -> taille 255 max + 1 (pour '\0')
   uint8_t multicast_addr[16];
 } client_msg;
 
@@ -28,13 +28,13 @@ typedef struct {
   int ID;
   char pseudo[11];
   char text[256];
-}message;
+} message;
 
 typedef struct {
   uint16_t codreq_id;
   uint16_t num_bloc;
   char data[513]; // 512 + 1 (pour '\0')
-}FilePacket;
+} FilePacket;
 
 typedef struct Node {
   FilePacket packet;
