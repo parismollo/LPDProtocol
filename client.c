@@ -568,8 +568,98 @@ int cli(int sock) {
   return 0;
 }
 
+void * multicast_receiver(void * arg) {
+  while(1) {
+    int port = 4321; // tmp
+    int max = 10; // tmp
+    char ** addresses = malloc(sizeof(char *) * max);
+    FILE * file = fopen(CLIENT_MCADDRESS, "r");
+
+    int address_len = 40;
+    char buffer[40];
+    int following = 0;
+    while(fgets(buffer, address_len, file) != NULL) {
+      buffer[strcspn(buffer, "\n")] = '\0';
+      addresses[following] = malloc(strlen(buffer) + 1);
+      strcpy(addresses[following], buffer);
+      following++;
+      if(following >= max) break;
+    }
+
+    fclose(file);
+    // Print addresses
+    // for (int j = 0; j < following; j++) {
+    //     printf("%s\n", addresses[j]);
+    // }
+
+    int sock;
+    if((sock = socket(AF_INET6, SOCK_DGRAM, 0)) < 0) {
+      perror("echec de socket");
+      return NULL;
+    }
+
+    int ok = 1;
+    if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &ok, sizeof(ok)) < 0) {
+      perror("echec de SO_REUSEADDR");
+      close(sock);
+      return NULL;
+    }
+
+    struct sockaddr_in6 grsock;
+    memset(&grsock, 0, sizeof(grsock));
+    grsock.sin6_family = AF_INET6;
+    grsock.sin6_addr = in6addr_any;
+    grsock.sin6_port = htons(port);
+
+    if(bind(sock, (struct sockaddr*) &grsock, sizeof(grsock))) {
+      perror("echec de bind");
+      close(sock);
+      return NULL;
+    }
+
+    int ifindex = if_nametoindex ("wlp2s0");
+
+    for(int j=0; j<following; j++) {
+      struct ipv6_mreq group;
+      inet_pton (AF_INET6, addresses[j], &group.ipv6mr_multiaddr.s6_addr);
+      group.ipv6mr_interface = ifindex;
+
+      if(setsockopt(sock, IPPROTO_IPV6, IPV6_JOIN_GROUP, &group, sizeof(group)) < 0) {
+        perror("echec de abonnement groupe");
+        close(sock);
+        return NULL;
+      }
+    }
+
+    char buf[1024];
+    struct sockaddr_in6 cliaddr;
+    socklen_t len = sizeof(cliaddr);
+    int n;
+    int loops = 0;
+    while (loops < following) {
+      memset(buf, 0, sizeof(buf));
+      n = recvfrom(sock, buf, sizeof(buf) - 1, 0, (struct sockaddr*)&cliaddr, &len);
+      if (n < 0) {
+        perror("failed to receive message");
+        continue;
+      }
+
+      char address_str[INET6_ADDRSTRLEN];
+      inet_ntop(AF_INET6, &cliaddr.sin6_addr, address_str, INET6_ADDRSTRLEN);
+
+      printf("Received message from multicast... %s: %s\n", address_str, buf);
+      loops++;
+    }
+    close(sock);
+  }
+  return NULL;
+}
 
 int main(int argc, char* argv[]) {
+
+
+  pthread_t tid;
+  pthread_create(&tid, NULL, multicast_receiver, NULL);
 
   int sock = socket(PF_INET6, SOCK_STREAM, 0);
   struct sockaddr_in6 adrso;
