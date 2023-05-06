@@ -23,6 +23,8 @@ paris@paris-pc:~/Documents/UniversiteParis/L3S6/PR6/megaphone_pr6$
 ```
 - [ ] download_file (client): fonction pour télécharger un fichier provenant d'un fil sur le server. (SIMILAIRE A recv_file de server.c) **CLIENT**
 - [ ] send_file (SERVEUR): fonction pour envoyer le fichier (correspondant a un certain fil) demandé au client (SIMILAIRE A send_file de client.c) **SERVEUR**
+- [ ] Read fil contents and send over in multicast messages
+- [ ] 
 
 ## Doing
 **Leopold**:
@@ -30,11 +32,7 @@ paris@paris-pc:~/Documents/UniversiteParis/L3S6/PR6/megaphone_pr6$
 - [x] recv_file (SERVEUR): fonction pour récupérer un fichier envoyer par le client puis le stocker correspondant au fil sur le server **SERVEUR**
 
 **Paris**:
-- [ ] Multicast implementation
-  - [x] Server assign address to fil, save it locally and send it back to client
-  - [x] Client save address locally
-  - [ ] Server send message in multicast address
-  - [ ] Client reads message in multicast address
+
 
 
 **Daniel**:
@@ -77,3 +75,8 @@ paris@paris-pc:~/Documents/UniversiteParis/L3S6/PR6/megaphone_pr6$
 - [x] Fix minor bugs on validate_exec
 - [x] Ajouter tout teste de verification avant valider msg du client (si codereq ok, si id existe, etc...)
 - [x] Changer DATA dans la structure client_msg. Mettre char DATA[256]. Modifier tout le code en conséquence
+- [x] Multicast implementation
+  - [x] Server assign address to fil, save it locally and send it back to client
+  - [x] Client save address locally
+  - [x] Server send message in multicast address
+  - [x] Client reads message in multicast address

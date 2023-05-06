@@ -6,8 +6,8 @@ define confirm
 endef
 
 all:
-	gcc -Wall client.c functions.c -o client
-	gcc -Wall server.c functions.c -o server
+	gcc -Wall -pthread client.c functions.c -o client
+	gcc -Wall -pthread server.c functions.c -o server
 
 clean:
 	rm -rf server

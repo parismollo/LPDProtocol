@@ -14,6 +14,8 @@
 #include <errno.h>
 #include <sys/wait.h>
 #include <net/if.h>
+#include <pthread.h>
+
 
 
 // STRUCTURES

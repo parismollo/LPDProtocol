@@ -1023,13 +1023,75 @@ int recv_client_msg(int sockclient) {
   return validate_and_exec_msg(sockclient, &cmsg);
 }
 
+int broadcast(char * filpath, int port, int numfil) {
+  int sock;
+
+  if((sock = socket(AF_INET6, SOCK_DGRAM, 0)) < 0) {
+    perror("erreur socket");
+    return 1;
+  }
+
+  struct sockaddr_in6 grsock;
+  memset(&grsock, 0, sizeof(grsock));
+  grsock.sin6_family = AF_INET6;
+  
+  char * multicast_address = get_multicast_address(numfil);
+  inet_pton(AF_INET6, multicast_address, &grsock.sin6_addr);
+  grsock.sin6_port = htons(port);
+
+  int ifindex = if_nametoindex("wlp2s0");
+  
+  if(setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_IF, &ifindex, sizeof(ifindex))) {
+    perror("erreur initialisation de l'interface locale");
+    return 1;
+  }
+
+  char buf[150];
+  sprintf(buf, "NUMFIL %d says: Bonjour!", numfil);
+  
+  if (sendto(sock, buf, strlen(buf), 0, (struct sockaddr*)&grsock, sizeof(grsock)) < 0) 
+    printf("erreurr send\n");
+
+  close(sock);
+  free(multicast_address);
+  return 0;
+}
+
+void * multicast_thread(void * arg) {
+  // int port = *((int *)arg); tmp
+  int port = 4321;
+  while(1) {
+    int nb = nb_fils();
+    for(int i=0; i<nb; i++) {
+      char * filepath = malloc(150);
+      sprintf(filepath, "fil%d/fil%d.txt", i+1, i+1);
+      // printf("Filepath: %s\n",filepath);
+      broadcast(filepath, port, i+1);
+      free(filepath);
+      sleep(5);
+    }
+  }
+}
+
+
 int main(int argc, char** args) {
 
   if (argc < 3) {
     fprintf(stderr, "Usage: %s <port> <multicast port>\n", args[0]);
     exit(1);
   }
-  
+
+
+  // Multicast feature running in a different thread
+  pthread_t multicast_tid;
+  int * mcport = malloc(sizeof(int));
+  *mcport = atoi(args[2]);
+  if(pthread_create(&multicast_tid, NULL, multicast_thread, mcport) < 0) {
+    perror("pthread_create failed");
+    exit(1);
+  }
+
+
   //*** creation de la socket serveur ***
   int sock = socket(PF_INET6, SOCK_STREAM, 0);
   if(sock < 0){
@@ -1090,5 +1152,6 @@ int main(int argc, char** args) {
     }
   }
   close(sock);
+  free(mcport);
   return 0;
 }
