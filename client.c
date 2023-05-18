@@ -36,11 +36,16 @@ int check_subscription() {
 }
 
 int send_error(int sock, char* msg) {
-    close(sock);
-    perror(msg);
-    exit(1);
-}
+    if(errno)
+      perror(msg);
+    else
+      fprintf(stderr, "%s\n", msg);
 
+    if(sock)
+      close(sock);
+
+    return -1;
+}
 
 int server_notification_post(int sockclient, client_msg* cmsg) {
   if (sockclient < 0)
@@ -413,15 +418,19 @@ int recv_server_query(int sock, client_msg* cmsg, int data) {
   return 0;
 }
 
-int send_file(int sock, int num_fil, char* filename) {
+////////////////////////////////////
+// TELECHARGEMENT/ENVOIE FICHIERS //
+////////////////////////////////////
+
+int send_file_to_server(int sock, int num_fil, char* file_path) {
   client_msg msg;
   msg.CODEREQ = 5;
   msg.ID = ID;
   msg.NUMFIL = num_fil;
   msg.NB = 0;
-  msg.DATALEN = strlen(filename);
+  msg.DATALEN = strlen(file_path);
   memset(msg.DATA, 0, 256);
-  strncpy(msg.DATA, filename, strlen(filename));
+  strncpy(msg.DATA, file_path, msg.DATALEN);
 
   if (query(sock, &msg) != 0)
     return send_error(sock, "Error send query\n");
@@ -439,81 +448,85 @@ int send_file(int sock, int num_fil, char* filename) {
   // On termine la connexion TCP avec le serveur
   close(sock);
 
-  // On récupère le port sur lequel on va envoyer les données
-  int udp_port = s_msg.NB;
-  printf("PORT UDP: %d\n", udp_port);
-  // On crée le socket UDP
-  int sock_udp = socket(PF_INET6, SOCK_DGRAM, 0);
-  if (sock_udp < 0)
-    return send_error(sock, "Error creation sock udp");
-  
+  // On récupère le port UDP pour envoyer le fichier
+  int UDP_port = s_msg.NB;
+
   //adresse de destination
   struct sockaddr_in6 servadr;
   memset(&servadr, 0, sizeof(servadr));
   servadr.sin6_family = AF_INET6;
   inet_pton(AF_INET6, IP_SERVER, &servadr.sin6_addr);
-  servadr.sin6_port = udp_port;
-  socklen_t len = sizeof(servadr);
+  servadr.sin6_port = UDP_port;
 
-  FILE* file = fopen(filename, "r");
-  if(file == NULL) {
-    close(sock_udp);
-    return send_error(sock, "error open file");
+  printf("PORT UDP: %d\n", UDP_port);
+
+  if(send_file(servadr, s_msg, file_path) < 0) {
+    fprintf(stderr, "error send file with UDP\n");
+    return -1;
   }
-
-  FilePacket packet;
-  memset(&packet, 0, sizeof(packet));
-  // Combine le codereq (5 bits de poids faible) avec l'ID (11 bits restants)
-  packet.codreq_id = ((uint16_t)msg.CODEREQ) | (msg.ID << 5);
-  packet.codreq_id = htons(packet.codreq_id);
-
-  uint16_t num_bloc = 1;
-  int nb_read;
-  printf("**CLIENT** BEGIN TRANSMISSION FILE\n");
-  do {
-    memset(packet.data, 0, 513);
-    nb_read = fread(packet.data, sizeof(char), 512, file); // on lit 512 octets dans le fichier
-    packet.num_bloc = htons(num_bloc);
-
-    printf("**CLIENT** SEND PACKET, SIZE: %d\n", nb_read);
-    if (sendto(sock_udp, &packet, sizeof(packet), 0, (struct sockaddr *)&servadr, len) < 0) {
-      close(sock_udp);
-      return send_error(sock, "send failed");
-    }
-    num_bloc++;
-  } while(nb_read == 512);
-  printf("**CLIENT** END TRANSMISSION FILE\n");
-  
-  fclose(file);
-  close(sock_udp);
 
   return 0;
 }
 
-int download_file(int sock, int num_fil, int num_port, char* filename) {
+int download_server_file(int sock, int num_fil, int UDP_port, char* filename) {
   client_msg msg;
   msg.CODEREQ = 6;
   msg.ID = ID;
   msg.NUMFIL = num_fil;
-  msg.NB = num_port;
+  msg.NB = UDP_port;
   msg.DATALEN = strlen(filename);
   memset(msg.DATA, 0, 256);
   strncpy(msg.DATA, filename, msg.DATALEN);
   
-  if (query(sock, &msg) == 0) {
-      // TODO
+  if (query(sock, &msg) != 0) {
+      fprintf(stderr, "Error send query\n");
+      return -1;
   }
 
-  // TODO
+  client_msg s_msg;
+  if(recv_server_query(sock, &s_msg, 0))
+    return send_error(sock, "error recv from server\n");
 
-  return 1; 
+  if(!(s_msg.CODEREQ == msg.CODEREQ && s_msg.ID == msg.ID &&
+       s_msg.NUMFIL == msg.NUMFIL && s_msg.NB == msg.NB)) {
+    return send_error(sock, "Wrong server answer\n");
+  }
+
+  // On termine la connexion TCP avec le serveur
+  close(sock);
+
+  printf("PORT UDP: %d\n", UDP_port);
+
+  Node* packets_list = NULL;
+  if((packets_list = download_file(UDP_port, msg.ID, msg.CODEREQ)) == NULL) {
+    fprintf(stderr, "Error in download_file\n");
+    return -1;
+  }
+
+  char file_path[1024];
+  memset(file_path, 0, 1024);
+  snprintf(file_path, 1024, "fil%d_%s", msg.NUMFIL, filename);
+
+  // On écrit les paquets dans le fichier
+  if(write_packets_to_file(packets_list, file_path) < 0) {
+    fprintf(stderr, "Erreur lors de l'écriture des packets dans le fichier\n");
+    free_list(packets_list);
+    return -1;
+  }
+
+  // On free la liste
+  free_list(packets_list);
+
+  return 0;
 }
 
 int cli(int sock) {
   printf("Megaphone says: Hi user! What do you want to do?\n");
-  printf("(1) Inscription\n(2) Poster billet\n(3) Get billets\n(4) Abonner au fil\n(5) Send file\n(6) Close connection\n");
+  printf("(1) Inscription\n(2) Poster billet\n(3) Get billets\n(4) Abonner au fil\n(5) Send file\n(6) Download file\n(7) Close connection\n");
   int num, numfil;
   scanf("%d", &num);
+  char filename[255];
+  memset(filename, 0, 255);
   switch (num)
   {
   case 1:
@@ -550,14 +563,19 @@ int cli(int sock) {
     return abonner_au_fil(sock, num);
   case 5:
     check_subscription();
-    char filename[255];
-    memset(filename, 0, 255);
     printf("File : ");
     scanf("%s", filename);
     printf("Fil number : ");
     scanf("%d", &numfil);
-    return send_file(sock, numfil, filename);
+    return send_file_to_server(sock, numfil, filename);
   case 6:
+    check_subscription();
+    printf("File : ");
+    scanf("%s", filename);
+    printf("Fil number : ");
+    scanf("%d", &numfil);
+    return download_server_file(sock, numfil, DEFAULT_UDP_PORT, filename);
+  case 7:
     printf("Megaphone says: Closing connection...\n");
     return -1;
   default:
