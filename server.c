@@ -731,135 +731,72 @@ int abonnement_fil(int sockclient, client_msg* msg){
 // TELECHARGEMENT/ENVOIE FICHIERS //
 ////////////////////////////////////
 
-// Fonction pour insérer un nouveau packet dans la liste chaînée triée
-void insert_packet_sorted(Node** head, FilePacket packet) {
-  Node* new_node = malloc(sizeof(Node));
-  if(new_node == NULL) {
-    perror("error malloc");
-    return;
+int send_file_to_client(int clientsock, client_msg* msg) {
+  // On stocke le nom du fichier pour plus tard
+  char file_name[256];
+  memset(file_name, 0, 256);
+  strncpy(file_name, msg->DATA, msg->DATALEN);
+
+  // On garde CODREQ, ID, NUMFIL et NB pareil
+  msg->DATALEN = 0;
+  memset(msg->DATA, 0, 256);
+
+  if(query(clientsock, msg) < 0) {
+    return send_error(clientsock, "error: cannot send msg in download_client_file");
   }
-  new_node->packet = packet;
-  new_node->next = NULL;
-  // Il n'y a pas de premier alors packet devient le head
-  // Sinon, si son numero est plus petit que le premier il devient egalement le head
-  if (*head == NULL || packet.num_bloc < (*head)->packet.num_bloc) {
-    new_node->next = *head;
-    *head = new_node;
+
+  // On termine la connexion TCP avec le client
+  close(clientsock);
+
+  // On récupère le port UDP pour envoyer le fichier
+  int UDP_port = msg->NB;
+
+  // Adresse de destination
+  struct sockaddr_in6 clientadr;
+  memset(&clientadr, 0, sizeof(clientadr));
+  clientadr.sin6_family = AF_INET6;
+  inet_pton(AF_INET6, "::1", &clientadr.sin6_addr); // TODO: POUR L INSTANT ON MET ::1. ATTENTION A MODIFIER PAR LA VRAI ADRESSE DU CLIENT QU ON RECUPERE DANS ACCEPT !!
+  clientadr.sin6_port = UDP_port;
+
+  char file_path[1024];
+  memset(file_path, 0, 1024);
+  sprintf(file_path, "fil%d/%s", msg->NUMFIL, file_name);
+
+  if(send_file(clientadr, *msg, file_path) < 0) {
+    fprintf(stderr, "error send file with UDP\n");
+    return -1;
   }
-  else { // Si >= a numero de head. On se deplace pour l'inserer au bon endroit (voir tout a la fin)
-    Node* current = *head;
-    while (current->next != NULL && current->next->packet.num_bloc < packet.num_bloc) {
-      current = current->next;
-    }
-    new_node->next = current->next;
-    current->next = new_node;
-  }
+
+  return 0;
 }
 
-// Fonction pour parcourir la liste chaînée triée et écrire les données dans le fichier
-void write_packets_to_file(Node* head, FILE* file) {
-  while (head != NULL) {
-    fwrite(head->packet.data, 1, strlen(head->packet.data), file);
-    head = head->next;
-  }
-}
-
-void free_list(Node* head) {
-  while (head != NULL) {
-    Node* current = head;
-    head = head->next;
-    free(current);
-  }
-}
-
-int recv_client_file(int clientsock, client_msg* msg) {
+int download_client_file(int clientsock, client_msg* msg, int UDP_port) {
   // On stocke le nom du fichier pour plus tard
   char file_name[256];
   memset(file_name, 0, 256);
   strncpy(file_name, msg->DATA, msg->DATALEN);
 
   // On garde CODREQ, ID et NUMFIL pareil
-  msg->NB = 33333; // Pour l'instant on prend ce port. Un jour il faudra vérifier si il n'est pas utilisé
+  msg->NB = UDP_port;
   msg->DATALEN = 0;
 
   if(query(clientsock, msg) < 0) {
-    return send_error(clientsock, "error: cannot send msg in recv_client_file");
+    return send_error(clientsock, "error: cannot send msg in download_client_file");
   }
 
   // On termine la connexion TCP avec le client
   close(clientsock);
 
-  int sock_udp = socket(PF_INET6, SOCK_DGRAM, 0);
-  if (sock_udp < 0) {
-    perror("error creation socket udp");
-    return -1;
-  }
-  
-  // On utilise la variable globale avec l'adresse du dernier client
-  // On met notre port UDP
-  struct sockaddr_in6 address_sock;
-  memset(&address_sock, 0, sizeof(address_sock));
-  address_sock.sin6_family = AF_INET6;
-  address_sock.sin6_port = msg->NB; // Pas de htons ici pour bind !
-  address_sock.sin6_addr = in6addr_any;
-
-  printf("PORT:%d\n", address_sock.sin6_port);
-
-  if (bind(sock_udp, (struct sockaddr *)&address_sock, sizeof(address_sock)) < 0) {
-    perror("Error bind");
-    close(sock_udp);
-    return -1;
-  }
-
-  struct sockaddr_in6 cliadr;
-  socklen_t len = sizeof(cliadr);
-
   Node* packets_list = NULL;
-  FilePacket packet;
-  uint8_t codreq;
-  uint16_t id;
-  // On reçoit les packets du client et on les stocke dans une liste chainée
-  printf("**RECEPTION D'UN FICHIER**\n");
-  do {
-    memset(&packet, 0, sizeof(packet));
-    int recv_len = recvfrom(sock_udp, &packet, sizeof(packet), 0, (struct sockaddr *)&cliadr, &len); // Faire un timemout : #TODO
-    if (recv_len < 0) {
-      perror("Error recvfrom");
-      break;
-    }
-    if (recv_len == 0) {
-      // Fin de la transmission
-      printf("Fin de transmission.\n");
-      break;
-    }
-
-    packet.codreq_id = ntohs(packet.codreq_id);
-    packet.num_bloc = ntohs(packet.num_bloc);
-
-    codreq = (packet.codreq_id & 0x001F); // On mask avec 111110000..
-    id = (packet.codreq_id & 0xFFE0) >> 5;
-
-    // On skip les paquets qui ne viennent pas du bon destinataire
-    // Ou qui sont mal formatés
-    if(codreq != msg->CODEREQ || id != msg->ID) {
-      printf("Bad id or bad codreq. Skipping this packet...\n");
-      continue;
-    }
-
-    printf("**FilePacket** codreq_id:%d, num_bloc: %d et strlen(data): %ld\n", packet.codreq_id, packet.num_bloc, strlen(packet.data));
-
-    // On ajoute ce packet a la liste triée
-    insert_packet_sorted(&packets_list, packet);
-  } while(strlen(packet.data) == 512);
-  close(sock_udp);
-
-  printf("**FICHIER RECU**\n");
+  if((packets_list = download_file(msg->NB, msg->ID, msg->CODEREQ)) == NULL) {
+    fprintf(stderr, "Error in download_file\n");
+    return -1;
+  }
 
   // On crée un "fake" message client pour pouvoir appeler la fonction handle_ticket
   // Cela a pour but d'écrire le nom du fichier recu dans le fichier du fil
   msg->NB = 0;
   msg->DATALEN = strlen(file_name);
-
   strncpy(msg->DATA, file_name, msg->DATALEN+1); // +1 pour copier aussi le '\0' et etre sur que tout va bien
 
   if(handle_ticket(-1, msg, 0) != 0) {
@@ -876,18 +813,13 @@ int recv_client_file(int clientsock, client_msg* msg) {
   memset(file_path, 0, 1024);
   sprintf(file_path, "fil%d/%s", msg->NUMFIL, file_name);
 
-  printf("ECRITURE DU FICHIER: %s\n", file_path);
-  // Écrire les données dans le fichier dans le bon ordre
-  FILE* file = fopen(file_path, "w");
-  if(file == NULL) {
-    fprintf(stderr, "error file creation\n");
-    free_list(packets_list);
-  }
   // On écrit les paquets dans le fichier
-  write_packets_to_file(packets_list, file);
-  
-  // On ferme le fichier
-  fclose(file);
+  if(write_packets_to_file(packets_list, file_path) < 0) {
+    fprintf(stderr, "Erreur lors de l'écriture des packets dans le fichier\n");
+    free_list(packets_list);
+    return -1;
+  }
+
   // On free la liste
   free_list(packets_list);
 
@@ -958,7 +890,10 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
       return abonnement_fil(socket, msg);
     case 5:
       printf("Reception d'un fichier client...\n");
-      return recv_client_file(socket, msg);
+      return download_client_file(socket, msg, DEFAULT_UDP_PORT);
+    case 6:
+      printf("Envoie d'un fichier...\n");
+      return send_file_to_client(socket, msg);
   }
   send_error(socket, "issue in function validate_and_exec_msg");
   return -1;
@@ -1039,7 +974,7 @@ int broadcast(char * filpath, int port, int numfil) {
   inet_pton(AF_INET6, multicast_address, &grsock.sin6_addr);
   grsock.sin6_port = htons(port);
 
-  int ifindex = if_nametoindex("wlp2s0");
+  int ifindex = if_nametoindex("wlp2s0"); // TODO: Change this (I know it's for testing)
   
   if(setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_IF, &ifindex, sizeof(ifindex))) {
     perror("erreur initialisation de l'interface locale");
@@ -1086,10 +1021,10 @@ int main(int argc, char** args) {
   pthread_t multicast_tid;
   int * mcport = malloc(sizeof(int));
   *mcport = atoi(args[2]);
-  if(pthread_create(&multicast_tid, NULL, multicast_thread, mcport) < 0) {
-    perror("pthread_create failed");
-    exit(1);
-  }
+  // if(pthread_create(&multicast_tid, NULL, multicast_thread, mcport) < 0) {
+  //   perror("pthread_create failed");
+  //   exit(1);
+  // }
 
 
   //*** creation de la socket serveur ***

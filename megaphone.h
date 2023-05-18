@@ -15,8 +15,10 @@
 #include <sys/wait.h>
 #include <net/if.h>
 #include <pthread.h>
+#include <sys/select.h>
+#include <sys/types.h>
 
-
+#define DEFAULT_UDP_PORT 33333
 
 // STRUCTURES
 typedef struct {
@@ -54,5 +56,13 @@ int change_infos(char* key, char* new_value);
 int query(int sock, client_msg* msg);
 void replace_after(char* str, char target, char replace_char, size_t maxsize);
 int prefix(char* str, char* pre);
+
+// Send/Download file
+void insert_packet_sorted(Node** head, FilePacket packet);
+int write_packets_to_file(Node* head, char* file_path);
+void free_list(Node* head);
+
+int send_file(struct sockaddr_in6 servadr, client_msg msg, char* file_path);
+Node* download_file(int UDP_port, int ID, int CODREQ);
 
 #endif
