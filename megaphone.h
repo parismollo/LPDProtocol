@@ -37,7 +37,7 @@ typedef struct {
 typedef struct {
   uint16_t codreq_id;
   uint16_t num_bloc;
-  char data[513]; // 512 + 1 (pour '\0')
+  char data[512];
 } FilePacket;
 
 typedef struct Node {

@@ -120,6 +120,9 @@ int send_file(struct sockaddr_in6 servadr, client_msg msg, char* file_path) {
       return -1;
     }
     num_bloc++;
+    // Permet de ralentir l'envoie. Car celui qui recoit doit trier les paquets et ça prend du temps
+    usleep(200); // Il faut en changer en fonction de la taille du fichier par exemple
+    // Attention les printf dans le serveur et le client peuvent ralentir beaucoup !
   } while(nb_read == 512);
   printf("END TRANSMISSION FILE\n");
   
@@ -152,14 +155,6 @@ Node* download_file(int UDP_port, int ID, int CODREQ) {
     return NULL;
   }
 
-  // On passe la socket en mode non-bloquant
-  // int sock_flags = fcntl(sock_udp, F_GETFL, 0);
-  // if(sock_flags == -1 || fcntl(sock_udp, F_SETFL, sock_flags | O_NONBLOCK) == -1) {
-  //   perror("erreur passage de la socket en mode non bloquant");
-  //   close(sock_udp);
-  //   return NULL;
-  // }
-
   struct sockaddr_in6 cliadr;
   socklen_t len = sizeof(cliadr);
 
@@ -170,96 +165,65 @@ Node* download_file(int UDP_port, int ID, int CODREQ) {
   // On reçoit les packets du client et on les stocke dans une liste chainée
   printf("**RECEPTION D'UN FICHIER**\n");
   do {
-    // fd_set rfd;
-    // FD_ZERO(&rfd);
-    // FD_SET(sock_udp, &rfd);
+    fd_set rfd;
+    FD_ZERO(&rfd);
+    FD_SET(sock_udp, &rfd);
 
-    // // On attend maximum 5s qu'un message arrive
-    // struct timeval timeout;
-    // timeout.tv_sec = 5;
-    // timeout.tv_usec = 0;
+    // On attend maximum 5s qu'un message arrive
+    struct timeval timeout;
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
 
-    // int ret_select = select(sock_udp + 1, NULL, &rfd, NULL, &timeout);
-
-    // if(ret_select < 0) {
-    //   perror("error select");
-    //   break;
-    // }
-    // else if(ret_select == 0) {
-    //   fprintf(stderr, "Timeout select reception fichier\n");
-    //   break;
-    // }
-
-    // // Si select indique qu'on peut lire sur la socket
-    // if (FD_ISSET(sock_udp, &rfd)) {
-    //   memset(&packet, 0, sizeof(packet));
-    //   int recv_len = recvfrom(sock_udp, &packet, sizeof(packet), 0, (struct sockaddr *)&cliadr, &len);
-
-    //   if (recv_len < 0) {
-    //     perror("Error recvfrom");
-    //     break;
-    //   }
-    //   else if (recv_len == 0) {
-    //     // Fin de la transmission
-    //     break;
-    //   }
-    //   packet.codreq_id = ntohs(packet.codreq_id);
-    //   packet.num_bloc = ntohs(packet.num_bloc);
-
-    //   codreq = (packet.codreq_id & 0x001F); // On mask avec 111110000..
-    //   id = (packet.codreq_id & 0xFFE0) >> 5;
-
-    //   // On skip les paquets qui ne viennent pas du bon destinataire
-    //   // Ou qui sont mal formatés
-    //   if(codreq != CODREQ || id != ID) {
-    //     printf("Bad id or bad codreq. Skipping this packet...\n");
-    //     continue;
-    //   }
-
-    //   printf("**FilePacket** codreq_id:%d, num_bloc: %d et strlen(data): %ld\n", packet.codreq_id, packet.num_bloc, strlen(packet.data));
-
-    //   // On ajoute ce packet a la liste triée
-    //   insert_packet_sorted(&packets_list, packet);
-    // }
-    // else {
-    //   printf("socket pas prête en lecture. On attend...\n");
-    //   continue;
-    // }
-
-    memset(&packet, 0, sizeof(packet));
-    int recv_len = recvfrom(sock_udp, &packet, sizeof(packet), 0, (struct sockaddr *)&cliadr, &len);
-
-    if (recv_len < 0) {
-      perror("Error recvfrom");
+    int ret_select = select(sock_udp + 1, &rfd, NULL, NULL, &timeout);
+    
+    if(ret_select < 0) {
+      perror("error select");
       break;
     }
-    else if (recv_len == 0) {
-      // Fin de la transmission
+    else if(ret_select == 0) {
+      fprintf(stderr, "Timeout select reception fichier\n");
       break;
     }
-    packet.codreq_id = ntohs(packet.codreq_id);
-    packet.num_bloc = ntohs(packet.num_bloc);
 
-    codreq = (packet.codreq_id & 0x001F); // On mask avec 111110000..
-    id = (packet.codreq_id & 0xFFE0) >> 5;
+    int num_bytes = 0;
+    // Si select indique qu'on peut lire sur la socket
+    if (FD_ISSET(sock_udp, &rfd)) {
+      memset(&packet, 0, sizeof(packet));
+      num_bytes = recvfrom(sock_udp, &packet, sizeof(packet), 0, (struct sockaddr *)&cliadr, &len);
+      
+      if(num_bytes < 0) {
+        fprintf(stderr, "erreur recvfrom");
+        break;
+      }
+      else if(num_bytes == 0) {
+        // Fin de la transmission
+        break;
+      }
 
-    // On skip les paquets qui ne viennent pas du bon destinataire
-    // Ou qui sont mal formatés
-    if(codreq != CODREQ || id != ID) {
-      printf("Bad id or bad codreq. Skipping this packet...\n");
+      packet.codreq_id = ntohs(packet.codreq_id);
+      packet.num_bloc = ntohs(packet.num_bloc);
+
+      codreq = (packet.codreq_id & 0x001F); // On mask avec 111110000..
+      id = (packet.codreq_id & 0xFFE0) >> 5;
+
+      // On skip les paquets qui ne viennent pas du bon destinataire
+      // Ou qui sont mal formatés
+      if(codreq != CODREQ || id != ID) {
+        printf("Bad id or bad codreq. Skipping this packet...\n");
+        continue;
+      }
+
+      printf("**FilePacket** codreq_id:%d, num_bloc: %d et strlen(data): %ld\n", packet.codreq_id, packet.num_bloc, strlen(packet.data));
+
+      // On ajoute ce packet a la liste triée
+      insert_packet_sorted(&packets_list, packet);
+    }
+    else {
+      printf("socket pas prête en lecture. On attend...\n");
       continue;
     }
 
-    printf("**FilePacket** codreq_id:%d, num_bloc: %d et strlen(data): %ld\n", packet.codreq_id, packet.num_bloc, strlen(packet.data));
-
-    // On ajoute ce packet a la liste triée
-    insert_packet_sorted(&packets_list, packet);
-
-  } while(strlen(packet.data) == 512);
-
-  // On rétablit le mode bloquant pour la socket
-  // inutile ?
-  // fcntl(sock_udp, F_SETFL, sock_flags);
+  } while(packet.data[511] != 0); // Tant que on recoit 512 octets de texte
 
   close(sock_udp);
 
