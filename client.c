@@ -287,7 +287,7 @@ int save_mcaddress(char * address) {
   return 0;
 }
 
-int server_notification_abonnement(int sock, client_msg * cmsg) {
+int server_notification_subscription(int sock, client_msg * cmsg) {
   if (sock < 0)
     return 1;
   uint16_t res;
@@ -350,7 +350,7 @@ int get_tickets(int sock, int num_fil, int nombre_billets) {
 
 // Permet de s'abonner à un fil de discussion en envoyant une requête avec le code 4 (abonnement à un fil) 
 // et le numéro de fil souhaité. Elle utilise également la fonction query pour envoyer la requête au serveur.
-int abonner_au_fil(int sock, int num_fil) {
+int subscribe_to_fil(int sock, int num_fil) {
   client_msg msg;
   msg.CODEREQ = 4;
   msg.ID = ID;
@@ -360,7 +360,7 @@ int abonner_au_fil(int sock, int num_fil) {
   memset(msg.DATA, 0, 256);
   if (query(sock, &msg) == 0) {
     client_msg msg;
-    return server_notification_abonnement(sock, &msg);
+    return server_notification_subscription(sock, &msg);
   }
   return 1;
 }

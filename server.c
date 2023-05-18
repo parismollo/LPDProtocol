@@ -5,7 +5,7 @@
 #define DATABASE "server_users.data"
 #define INFOS "infos.data"
 
-void affiche_connexion(struct sockaddr_in6 adrclient){
+void print_connexion(struct sockaddr_in6 adrclient){
   char adr_buf[INET6_ADDRSTRLEN];
   memset(adr_buf, 0, sizeof(adr_buf));
   
@@ -707,7 +707,7 @@ char * get_multicast_address(int numfil){
   return address;
 }
 
-int abonnement_fil(int sockclient, client_msg* msg){
+int subscription_fil(int sockclient, client_msg* msg){
   char * multicast_addr;
   if((multicast_addr = get_multicast_address(msg->NUMFIL)) == NULL) 
       return send_error(sockclient, "error: could not add subscription");
@@ -955,7 +955,7 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
       if(msg->DATALEN != 0) {
         return send_error(socket, "DATALEN must be 0");
       } 
-      return abonnement_fil(socket, msg);
+      return subscription_fil(socket, msg);
     case 5:
       printf("Reception d'un fichier client...\n");
       return recv_client_file(socket, msg);
