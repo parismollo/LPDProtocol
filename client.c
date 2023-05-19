@@ -1,9 +1,11 @@
 #include "megaphone.h"
 
 #define SIZE_MESS 1024
-// #define IP_SERVER "fdc7:9dd5:2c66:be86:4849:43ff:fe49:79bf"
+// #define IP_SERVER "fdc7:9dd5:2c66:be86:4849:43ff:fe49:79bf" // IP LULU
+// #define IP_SERVER "192.168.70.237" // IPV4 LAMPE
+// #define IP_SERVER "fdc7:9dd5:2c66:be86:4849:43ff:fe49:79be" // IPV6 LAMPE
 #define IP_SERVER "::1"
-#define PORT 7777
+#define PORT 7776
 #define CLIENT_ID_FILE "client_id.data"
 #define CLIENT_MCADDRESS "address.data"
 
