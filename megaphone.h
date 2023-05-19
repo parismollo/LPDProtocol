@@ -29,6 +29,13 @@ typedef struct {
 } client_msg;
 
 typedef struct {
+  u_int8_t CODEREQ, ID;
+  uint16_t NUMFIL;
+  char PSEUDO[11];
+  char DATA[21];
+} notification;
+
+typedef struct {
   int ID;
   char pseudo[11];
   char text[256];

@@ -61,6 +61,32 @@ int query(int sock, client_msg* msg) {
   return 0;
 }
 
+int notification_query(int sock, notification* msg, struct sockaddr_in6 grsock) {
+  msg->ID &= 0x07FF; // Keep only the first 11 bits 
+  msg->CODEREQ &= 0x001F; // Keep only the first 5 bits
+
+  // Combine the codereq (5 low order bits) with the ID (remaining 11 bits)
+  uint16_t res = ((uint16_t)msg->CODEREQ) | (msg->ID << 5);
+  res = htons(res); 
+  sendto(sock, &res, sizeof(res), 0, (struct sockaddr*)&grsock, sizeof(grsock));
+
+  u_int16_t tmp = htons(msg->NUMFIL);
+  sendto(sock, &tmp, sizeof(tmp), 0, (struct sockaddr*)&grsock, sizeof(grsock));
+
+  // Ensure PSEUDO is exactly 10 bytes
+  char pseudo[11] = {0}; // Initialize to zeros
+  strncpy(pseudo, msg->PSEUDO, 10);
+  sendto(sock, pseudo, 10, 0, (struct sockaddr*)&grsock, sizeof(grsock));
+
+  // Ensure DATA is exactly 20 bytes
+  char data[21] = {0}; // Initialize to zeros
+  strncpy(data, msg->DATA, 20);
+  sendto(sock, data, 20, 0, (struct sockaddr*)&grsock, sizeof(grsock));
+  
+  return 0;
+}
+
+
 void goto_last_line(int fd) {
   if(fd < 0)
     return;
@@ -960,6 +986,7 @@ int recv_client_msg(int sockclient) {
 
 int broadcast(char * filpath, int port, int numfil) {
   int sock;
+  int nb_msg = 1; // tmp
 
   if((sock = socket(AF_INET6, SOCK_DGRAM, 0)) < 0) {
     perror("erreur socket");
@@ -981,20 +1008,46 @@ int broadcast(char * filpath, int port, int numfil) {
     return 1;
   }
 
-  char buf[150];
-  sprintf(buf, "NUMFIL %d says: Bonjour!", numfil);
-  
-  if (sendto(sock, buf, strlen(buf), 0, (struct sockaddr*)&grsock, sizeof(grsock)) < 0) 
-    printf("erreurr send\n");
+  // char buf[150];
+  // sprintf(buf, "NUMFIL %d says: Bonjour!", numfil);
+  // Here I can use get_last_messages for the same fil
+  // and for each message sent over to client (adapt message for notification)
+  // maybe use/adapt send_msg_ticket
+  message* messages = malloc(sizeof(message) * nb_msg);
+  if(messages == NULL) {
+    // send error
+    return -1;
+  }
 
-  close(sock);
-  free(multicast_address);
-  return 0;
+  if(get_last_messages(nb_msg, numfil, messages) != 0) {
+    goto cleanup;
+  }
+  
+  notification msg;
+  msg.CODEREQ = 4;
+  msg.ID = 0;
+  msg.NUMFIL = numfil;
+  for(int j=0;j<nb_msg;j++) {
+    strncpy(msg.DATA, messages[j].text, 20);
+    msg.DATA[20] = '\0';
+    strncpy(msg.PSEUDO, messages[j].pseudo, 10);
+    msg.PSEUDO[10] = '\0';
+    notification_query(sock, &msg, grsock);
+  }
+
+  goto cleanup;
+
+  cleanup:
+    close(sock);
+    free(multicast_address);
+    free(messages);
+    return 0;
 }
 
 void * multicast_thread(void * arg) {
   // int port = *((int *)arg); tmp
   int port = 4321;
+  int sleep_value = 2;
   while(1) {
     int nb = nb_fils();
     for(int i=0; i<nb; i++) {
@@ -1003,7 +1056,7 @@ void * multicast_thread(void * arg) {
       // printf("Filepath: %s\n",filepath);
       broadcast(filepath, port, i+1);
       free(filepath);
-      sleep(5);
+      sleep(sleep_value);
     }
   }
 }
@@ -1016,16 +1069,14 @@ int main(int argc, char** args) {
     exit(1);
   }
 
-
   // Multicast feature running in a different thread
   pthread_t multicast_tid;
   int * mcport = malloc(sizeof(int));
   *mcport = atoi(args[2]);
-  // if(pthread_create(&multicast_tid, NULL, multicast_thread, mcport) < 0) {
-  //   perror("pthread_create failed");
-  //   exit(1);
-  // }
-
+  if(pthread_create(&multicast_tid, NULL, multicast_thread, mcport) < 0) {
+    perror("pthread_create failed");
+    exit(1);
+  }
 
   //*** creation de la socket serveur ***
   int sock = socket(PF_INET6, SOCK_STREAM, 0);
@@ -1065,16 +1116,15 @@ int main(int argc, char** args) {
   }
 
   struct sockaddr_in6 client_addr;
-  socklen_t len;
+  socklen_t cli_len = sizeof(client_addr);
 
   while(1) {
       //*** le serveur accepte une connexion et cree la socket de communication avec le client ***
-    int sockclient = accept(sock, (struct sockaddr *) &client_addr, &len);
+    int sockclient = accept(sock, (struct sockaddr *) &client_addr, &cli_len);
     if(sockclient == -1){
       perror("probleme socket client");
       exit(1);
     }
-
     switch (fork()) {
     case -1:
       break;
