@@ -1,8 +1,0 @@
-{
-  "files.associations": {
-    "*.excalidraw": "json",
-    "*.excalidrawlib": "json",
-    "select.h": "c",
-    "wait.h": "c"
-  }
-}

@@ -96,7 +96,7 @@ int server_notification_post(int sockclient, client_msg* cmsg) {
 
 // Permet d'envoyer un billet au serveur pour un numéro de fil donné. 
 // Elle crée une structure client_msg avec le code de requête 2 (envoi de billet) 
-// et les informations nécessaires, puis appelle la fonction query pour envoyer la requête au serveur.
+// et les informations nécessaires, puis appelle la fonction query_server pour envoyer la requête au serveur.
 int send_ticket(int sock, int numfil, char* text) {
     client_msg msg;
     msg.CODEREQ = 2;
@@ -106,14 +106,14 @@ int send_ticket(int sock, int numfil, char* text) {
     msg.DATALEN = strlen(text);
     memset(msg.DATA, 0, 256);
     strncpy(msg.DATA, text, strlen(text));
-    if (query(sock, &msg) == 0) {
+    if (query_server(sock, &msg) == 0) {
         client_msg msg; //TODO : pourquoi ?
         return server_notification_post(sock, &msg);
     }
     return 1;
 }
 
-int query(int sock, client_msg* msg) {
+int query_server(int sock, client_msg* msg) {
     // printf("id: %d, codreq: %d\n", msg->ID, msg->CODEREQ);
     msg->ID &= 0x07FF; // On garde que les 11 premiers bits 
     msg->CODEREQ &= 0x001F; // On garde que les 5 premiers bits
@@ -204,7 +204,7 @@ int query_subscription(int sock, char* pseudo) {
 // Permet de récupérer un certain nombre de billets pour un numéro de fil donné. 
 // Elle crée une structure client_msg avec le code de requête 3 (récupération de billets), 
 // le numéro de fil et le nombre de billets demandés,    
-// puis appelle la fonction query pour envoyer la requête au serveur.
+// puis appelle la fonction query_server pour envoyer la requête au serveur.
 int process_ticket(int sock) {
   
   // read numfil
@@ -213,6 +213,7 @@ int process_ticket(int sock) {
     return send_error(sock, "recv failed1");
   }
   numfil = ntohs(numfil);
+
   // read origine
   char origine[11];
   if(recv(sock, origine, 10, 0) < 0) return send_error(sock, "recv failed2");
@@ -265,15 +266,15 @@ int server_notification_get(int sock, client_msg* cmsg) {
   cmsg->CODEREQ = (res & 0x001F); // On mask avec 111110000..
   if(cmsg->CODEREQ == 31) return 1; 
   cmsg->ID = (res & 0xFFE0) >> 5;
-  recu = recv(sock, &res, sizeof(uint16_t), 0); 
   
+  recu = recv(sock, &res, sizeof(uint16_t), 0); 
   if (recu <= 0) {
     perror("erreur lecture notif get");
     return 1;
   }
   cmsg->NUMFIL = ntohs(res);
-  recu = recv(sock, &res, sizeof(uint16_t), 0);
   
+  recu = recv(sock, &res, sizeof(uint16_t), 0);
   if (recu <= 0){
     return send_error(sock, "error recv");
   }
@@ -355,7 +356,7 @@ int get_tickets(int sock, int num_fil, int nombre_billets) {
     msg.NB = nombre_billets;
     msg.DATALEN = 0;
     memset(msg.DATA, 0, 256);
-    if (query(sock, &msg) == 0) {
+    if (query_server(sock, &msg) == 0) {
         client_msg msg;
         return server_notification_get(sock, &msg);
     }
@@ -363,7 +364,7 @@ int get_tickets(int sock, int num_fil, int nombre_billets) {
 }
 
 // Permet de s'abonner à un fil de discussion en envoyant une requête avec le code 4 (abonnement à un fil) 
-// et le numéro de fil souhaité. Elle utilise également la fonction query pour envoyer la requête au serveur.
+// et le numéro de fil souhaité. Elle utilise également la fonction query_server pour envoyer la requête au serveur.
 int subscribe_to_fil(int sock, int num_fil) {
   client_msg msg;
   msg.CODEREQ = 4;
@@ -372,7 +373,7 @@ int subscribe_to_fil(int sock, int num_fil) {
   msg.NB = 0;
   msg.DATALEN = 0;
   memset(msg.DATA, 0, 256);
-  if (query(sock, &msg) == 0) {
+  if (query_server(sock, &msg) == 0) {
     client_msg msg;
     return server_notification_subscription(sock, &msg);
   }
@@ -477,7 +478,7 @@ int send_file_to_server(int sock, int num_fil, char* file_path) {
   memset(msg.DATA, 0, 256);
   strncpy(msg.DATA, file_path, msg.DATALEN);
 
-  if (query(sock, &msg) != 0)
+  if (query_server(sock, &msg) != 0)
     return send_error(sock, "Error send query\n");
 
   //printf("**Server notification**: CODEREQ: %d ID: %d NUMFIL: %d DATA: %s\n", msg.CODEREQ, msg.ID, msg.NUMFIL, msg.DATA);
@@ -523,7 +524,7 @@ int download_server_file(int sock, int num_fil, int UDP_port, char* filename) {
   memset(msg.DATA, 0, 256);
   strncpy(msg.DATA, filename, msg.DATALEN);
   
-  if (query(sock, &msg) != 0) {
+  if (query_server(sock, &msg) != 0) {
       fprintf(stderr, "Error send query\n");
       return -1;
   }
@@ -685,7 +686,7 @@ void * multicast_receiver(void * arg) {
       goto cleanup;
     }
 
-    int ifindex = if_nametoindex ("wlp2s0"); //tmp
+    int ifindex = if_nametoindex ("enp4s0"); // wlp2s0"); //tmp
 
     for(int j=0; j<following; j++) {
       struct ipv6_mreq group;
@@ -693,7 +694,7 @@ void * multicast_receiver(void * arg) {
       group.ipv6mr_interface = ifindex;
 
       if(setsockopt(sock, IPPROTO_IPV6, IPV6_JOIN_GROUP, &group, sizeof(group)) < 0) {
-        perror("echec de abonnement groupe");
+        perror("echec abonnement groupe");
         close(sock);
         goto cleanup;
       }

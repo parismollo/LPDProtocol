@@ -60,9 +60,10 @@ int get_infos(char* key, char* value, size_t val_size);
 int increase_nb_fils();
 int nb_fils();
 int change_infos(char* key, char* new_value);
-int query(int sock, client_msg* msg);
 void replace_after(char* str, char target, char replace_char, size_t maxsize);
 int prefix(char* str, char* pre);
+int query_client(int sock, client_msg* msg);
+int query_server(int sock, client_msg* msg);
 
 // Send/Download file
 void insert_packet_sorted(Node** head, FilePacket packet);
