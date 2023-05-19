@@ -22,8 +22,8 @@
 
 // STRUCTURES
 typedef struct {
-  u_int8_t CODEREQ, ID, DATALEN;
-  uint16_t NUMFIL, NB;
+  u_int8_t CODEREQ, DATALEN;
+  uint16_t NUMFIL, NB, ID;
   char DATA[256]; // DATALEN codé sur 1 octet. Donc DATA -> taille 255 max + 1 (pour '\0')
   uint8_t multicast_addr[16];
 } client_msg;

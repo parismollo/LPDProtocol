@@ -1,8 +1,8 @@
 #include "megaphone.h"
 
 #define SIZE_MESS 1024
-// #define IP_SERVER "fdc7:9dd5:2c66:be86:4849:43ff:fe49:79bf"
-#define IP_SERVER "::1"
+#define IP_SERVER "fdc7:9dd5:2c66:be86:4849:43ff:fe49:79bf"
+// #define IP_SERVER "::1"
 #define PORT 7777
 #define CLIENT_ID_FILE "client_id.data"
 #define CLIENT_MCADDRESS "address.data"
@@ -114,25 +114,39 @@ int send_ticket(int sock, int numfil, char* text) {
 }
 
 int query(int sock, client_msg* msg) {
-
+    // printf("id: %d, codreq: %d\n", msg->ID, msg->CODEREQ);
     msg->ID &= 0x07FF; // On garde que les 11 premiers bits 
     msg->CODEREQ &= 0x001F; // On garde que les 5 premiers bits
     
     // Combine le codereq (5 bits de poids faible) avec l'ID (11 bits restants)
     uint16_t res = ((uint16_t)msg->CODEREQ) | (msg->ID << 5);
+    
     res = htons(res); 
-    if (send(sock, &res, sizeof(res), 0) < 0) send_error(sock, "send failed"); 
+    if (send(sock, &res, sizeof(res), 0) < 0)
+      return send_error(sock, "send failed"); 
   
     u_int16_t tmp = htons(msg->NUMFIL);
-    if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0) send_error(sock, "send failed"); 
+    if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0)
+      return send_error(sock, "send failed"); 
 
     tmp = htons(msg->NB);
-    if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0) send_error(sock, "send failed");
-    if (send(sock, &msg->DATALEN, sizeof(u_int8_t), 0) < 0) send_error(sock, "send failed");
+    if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0)
+      return send_error(sock, "send failed");
+
+    if (send(sock, &(msg->DATALEN), sizeof(u_int8_t), 0) < 0)
+      return send_error(sock, "send failed");
+    printf("DATA: %s\n", msg->DATA);
 
     if(msg->DATALEN > 0) {
-      if (send(sock, msg->DATA, msg->DATALEN, 0) < 0) send_error(sock, "send failed");
+      if (send(sock, msg->DATA, msg->DATALEN, 0) < 0)
+        return send_error(sock, "send failed");
     }
+    else {
+      memset(msg->DATA, 0, 255);
+      if (send(sock, msg->DATA, 255, 0) < 0)
+        return send_error(sock, "send failed");
+    }
+    
     return 0;
 }
 
@@ -192,40 +206,48 @@ int query_subscription(int sock, char* pseudo) {
 // le numéro de fil et le nombre de billets demandés,    
 // puis appelle la fonction query pour envoyer la requête au serveur.
 int process_ticket(int sock) {
+  
   // read numfil
   uint16_t numfil;
-  if(recv(sock, &numfil, sizeof(uint16_t), 0) == -1 ) {
-    return send_error(sock, "recv failed");
+  if(recv(sock, &numfil, sizeof(uint16_t), 0) < 0) {
+    return send_error(sock, "recv failed1");
   }
   numfil = ntohs(numfil);
   // read origine
   char origine[11];
-  if(recv(sock, &origine, 10, 0) == -1) return send_error(sock, "recv failed");
-  origine[11] = '\0';
+  if(recv(sock, origine, 10, 0) < 0) return send_error(sock, "recv failed2");
+  origine[10] = '\0';
   clear_pseudo(origine);
   // read pseudo
   char pseudo[11];
-  if(recv(sock, &pseudo, 10, 0) == -1) return send_error(sock, "recv failed");
-  pseudo[11] = '\0';
+  if(recv(sock, pseudo, 10, 0) < 0) return send_error(sock, "recv failed3");
+  pseudo[10] = '\0';
   clear_pseudo(pseudo);
   // read datalen
+  
   uint8_t len;
-  if(recv(sock, &len, sizeof(uint8_t), 0) == -1) {
-    return send_error(sock, "recv failed");
+  if(recv(sock, &len, sizeof(uint8_t), 0) < 0) {
+    return send_error(sock, "recv failed4");
   }
-  // read data
-  char *data = malloc(len+1);
-  if (data == NULL) {
-    return send_error(sock, "malloc failed");
-  }
-  memset(data, 0, len+1);
-  if(recv(sock, data, len, 0) <= 0) {
+  
+  if(len > 0) {
+    // read data
+    char *data = malloc(len+1);
+    if (data == NULL) {
+      return send_error(sock, "malloc failed5");
+    }
+    memset(data, 0, len+1);
+    if(recv(sock, data, len, 0) <= 0) {
+      free(data);
+      return send_error(sock, "recv failed6");
+    }
+    printf("[Server response]: NUMFIL: %hu ORIGIN: %s PSEUDO: %s DATALEN: %d DATA: %s\n", numfil, origine, pseudo, len, data);
     free(data);
-    return send_error(sock, "recv failed");
+  }
+  else {
+    printf("[Server response]: NUMFIL: %hu ORIGIN: %s PSEUDO: %s, DATALEN: %d\n", numfil, origine, pseudo, len);
   }
 
-  printf("[Server response]: NUMFIL: %hu ORIGIN: %s PSEUDO: %s DATA: %s\n", numfil, origine, pseudo, data);
-  free(data);
   return 0;
 }
 
@@ -239,7 +261,6 @@ int server_notification_get(int sock, client_msg* cmsg) {
     perror("erreur lecture notif getx");
     return(1);
   }
-
   res = ntohs(res);
   cmsg->CODEREQ = (res & 0x001F); // On mask avec 111110000..
   if(cmsg->CODEREQ == 31) return 1; 
@@ -257,28 +278,16 @@ int server_notification_get(int sock, client_msg* cmsg) {
     return send_error(sock, "error recv");
   }
   cmsg->NB = ntohs(res);
-  
-  recu = recv(sock, &res, sizeof(uint8_t), 0);
-  if (recu <= 0) {
-    perror("erreur recv");
-    return 1;
-  }
-  cmsg->DATALEN = res;
 
-  if(cmsg->DATALEN > 0) {
-    memset(cmsg->DATA, 0, 256);
-
-    recu = recv(sock, cmsg->DATA, cmsg->DATALEN, 0);
-    if (recu <= 0) {
-      perror("erreur recv");
-      return 1;
-    }
-  }
   printf("[Server response]: CODEREQ: %d ID: %d NUMFIL: %d :  NB: %d\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->NB);
 
   // Handle next n messages
   for(int i=0; i<cmsg->NB; i++) {
-    process_ticket(sock);
+
+    if(process_ticket(sock) < 0) {
+      fprintf(stderr, "ERREUR: process ticket\n");
+      return -1;
+    }
   }
   return 0;
 }
@@ -560,7 +569,7 @@ int cli(int sock) {
     printf("[Server response]: Type the numfil \n");
     int num;
     scanf("%d", &num);
-    return abonner_au_fil(sock, num);
+    return subscribe_to_fil(sock, num);
   case 5:
     check_subscription();
     printf("File : ");

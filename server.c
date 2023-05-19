@@ -42,21 +42,21 @@ int query(int sock, client_msg* msg) {
   // Combine le codereq (5 bits de poids faible) avec l'ID (11 bits restants)
   uint16_t res = ((uint16_t)msg->CODEREQ) | (msg->ID << 5);
   res = htons(res); 
-  if (send(sock, &res, sizeof(res), 0) < 0) send_error(sock, "send failed"); 
+  if (send(sock, &res, sizeof(res), 0) < 0) return send_error(sock, "send failed"); 
 
   u_int16_t tmp = htons(msg->NUMFIL);
-  if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0) send_error(sock, "send failed"); 
+  if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0) return send_error(sock, "send failed"); 
 
   tmp = htons(msg->NB);
-  if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0) send_error(sock, "send failed");
+  if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0) return send_error(sock, "send failed");
 
-  if (send(sock, &msg->DATALEN, sizeof(u_int8_t), 0) < 0) send_error(sock, "send failed");
+  if (send(sock, &msg->DATALEN, sizeof(u_int8_t), 0) < 0) return send_error(sock, "send failed");
 
   if(msg->DATALEN > 0)
-    if (send(sock, msg->DATA, msg->DATALEN, 0) < 0) send_error(sock, "send failed");
+    if (send(sock, msg->DATA, msg->DATALEN, 0) < 0) return send_error(sock, "send failed");
 
   if(msg->CODEREQ == 4) {
-    if(send(sock, msg->multicast_addr, 16,0)<0) send_error(sock, "send failed"); 
+    if(send(sock, msg->multicast_addr, 16,0)<0) return send_error(sock, "send failed"); 
   }
   return 0;
 }
