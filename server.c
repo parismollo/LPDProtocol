@@ -662,26 +662,26 @@ int list_tickets(int sockclient, client_msg* msg) {
 }
 
 int is_user_registered(int id) {
-  int fd = open(DATABASE, O_RDONLY);
-  if(fd < 0) {
+  FILE* f = fopen(DATABASE, "r");
+  if(f < 0) {
     perror("open in is_user_registered");
-    return -1;
+    return 0;
   }
 
   char buffer[128];
   memset(buffer, 0, sizeof(buffer));
 
-  while(read(fd, buffer, sizeof(buffer)) > 0) {
+  while(fgets(buffer, sizeof(buffer), f) > 0) {
     int current_id = atoi(strtok(buffer, " "));
     // printf("current id: %d\n", current_id);
     if(current_id == id) {
-      close(fd);
+      fclose(f);
       return 1;
     }
     memset(buffer, 0, sizeof(buffer));
   }
 
-  close(fd);
+  fclose(f);
   return 0;
 }
 
@@ -860,14 +860,14 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
     return -1;
   }
   if(req != 1) { // Verify that the user is regitered
-    if(!is_user_registered(msg->ID)){
+    if(!is_user_registered(msg->ID)) {
       send_error(socket, "veuillez-vous inscrire");
       return -1;
     }
 
   }
   if(req > 2) { // Verifie que le fil existe
-    if(msg->NUMFIL < 0 || msg->NUMFIL > nb_fils()){
+    if(msg->NUMFIL < 0 || msg->NUMFIL > nb_fils()) {
         send_error(socket, "Ce fil n'existe pas");
         return -1;
       }
@@ -1001,7 +1001,7 @@ int broadcast(char * filpath, int port, int numfil) {
   inet_pton(AF_INET6, multicast_address, &grsock.sin6_addr);
   grsock.sin6_port = htons(port);
 
-  int ifindex = if_nametoindex("wlp2s0"); // TODO: Change this (I know it's for testing)
+  int ifindex = if_nametoindex("enp4s0"); // TODO: Change this (I know it's for testing)
   
   if(setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_IF, &ifindex, sizeof(ifindex))) {
     perror("erreur initialisation de l'interface locale");

@@ -1,8 +1,8 @@
 #include "megaphone.h"
 
 #define SIZE_MESS 1024
-#define IP_SERVER "fdc7:9dd5:2c66:be86:4849:43ff:fe49:79bf"
-// #define IP_SERVER "::1"
+// #define IP_SERVER "fdc7:9dd5:2c66:be86:4849:43ff:fe49:79bf"
+#define IP_SERVER "::1"
 #define PORT 7777
 #define CLIENT_ID_FILE "client_id.data"
 #define CLIENT_MCADDRESS "address.data"
@@ -142,9 +142,9 @@ int query(int sock, client_msg* msg) {
         return send_error(sock, "send failed");
     }
     else {
-      memset(msg->DATA, 0, 255);
-      if (send(sock, msg->DATA, 255, 0) < 0)
-        return send_error(sock, "send failed");
+      // memset(msg->DATA, 0, 255);
+      // if (send(sock, msg->DATA, 255, 0) < 0)
+      //   return send_error(sock, "send failed");
     }
     
     return 0;
