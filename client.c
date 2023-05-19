@@ -418,6 +418,42 @@ int recv_server_query(int sock, client_msg* cmsg, int data) {
   return 0;
 }
 
+int recv_server_thread_notification(int sock, notification* cmsg, struct sockaddr* cliaddr, socklen_t * len) {
+  // This function refers to the notification being received by all the fils the user is subscribed to.
+  // This is not the reply from cli-server tcp interecations!
+  if (sock < 0)
+    return 1;
+  uint16_t res;
+  int recu = recvfrom(sock, &res, sizeof(uint16_t), 0, (struct sockaddr*)cliaddr, len);
+  if (recu <= 0) { 
+    perror("Failed to receive CODEREQ and ID"); 
+    return 1;
+  }
+
+  res = ntohs(res);
+  cmsg->CODEREQ = (res & 0x001F); // On mask avec 111110000..
+  if(cmsg->CODEREQ == 31) return 1; 
+  cmsg->ID = (res & 0xFFE0) >> 5;
+
+  recu = recvfrom(sock, &res, sizeof(uint16_t), 0, (struct sockaddr*)cliaddr, len);
+  if (recu <= 0) { 
+    perror("Failed to receive NUMFIL"); 
+    return 1;
+  }
+  cmsg->NUMFIL = ntohs(res);
+
+  recvfrom(sock, cmsg->PSEUDO, 10, 0, (struct sockaddr*)cliaddr, len);
+  recvfrom(sock, cmsg->DATA, 20, 0, (struct sockaddr*)cliaddr, len);
+
+  cmsg->PSEUDO[10] = '\0';
+  cmsg->DATA[20] = '\0';
+
+  printf("**Server notification**: CODEREQ: %d ID: %d NUMFIL: %d :  PSEUDO: %s DATA: %s\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->PSEUDO, cmsg->DATA);
+
+  return 0;
+}
+
+
 ////////////////////////////////////
 // TELECHARGEMENT/ENVOIE FICHIERS //
 ////////////////////////////////////
@@ -560,7 +596,7 @@ int cli(int sock) {
     printf("[Server response]: Type the numfil \n");
     int num;
     scanf("%d", &num);
-    return abonner_au_fil(sock, num);
+    return subscribe_to_fil(sock, num);
   case 5:
     check_subscription();
     printf("File : ");
@@ -592,9 +628,15 @@ void * multicast_receiver(void * arg) {
     char ** addresses = malloc(sizeof(char *) * max);
     FILE * file = fopen(CLIENT_MCADDRESS, "r");
 
-    int address_len = 40;
-    char buffer[40];
+    int address_len = 100;
+    char buffer[101];
     int following = 0;
+
+    if (file == NULL) {
+      perror("Failed to open file");
+      goto cleanup;
+    }
+
     while(fgets(buffer, address_len, file) != NULL) {
       buffer[strcspn(buffer, "\n")] = '\0';
       addresses[following] = malloc(strlen(buffer) + 1);
@@ -612,14 +654,14 @@ void * multicast_receiver(void * arg) {
     int sock;
     if((sock = socket(AF_INET6, SOCK_DGRAM, 0)) < 0) {
       perror("echec de socket");
-      return NULL;
+      goto cleanup;
     }
 
     int ok = 1;
     if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &ok, sizeof(ok)) < 0) {
       perror("echec de SO_REUSEADDR");
       close(sock);
-      return NULL;
+      goto cleanup;
     }
 
     struct sockaddr_in6 grsock;
@@ -631,10 +673,10 @@ void * multicast_receiver(void * arg) {
     if(bind(sock, (struct sockaddr*) &grsock, sizeof(grsock))) {
       perror("echec de bind");
       close(sock);
-      return NULL;
+      goto cleanup;
     }
 
-    int ifindex = if_nametoindex ("wlp2s0");
+    int ifindex = if_nametoindex ("wlp2s0"); //tmp
 
     for(int j=0; j<following; j++) {
       struct ipv6_mreq group;
@@ -644,39 +686,33 @@ void * multicast_receiver(void * arg) {
       if(setsockopt(sock, IPPROTO_IPV6, IPV6_JOIN_GROUP, &group, sizeof(group)) < 0) {
         perror("echec de abonnement groupe");
         close(sock);
-        return NULL;
+        goto cleanup;
       }
     }
-
-    char buf[1024];
     struct sockaddr_in6 cliaddr;
     socklen_t len = sizeof(cliaddr);
-    int n;
     int loops = 0;
     while (loops < following) {
-      memset(buf, 0, sizeof(buf));
-      n = recvfrom(sock, buf, sizeof(buf) - 1, 0, (struct sockaddr*)&cliaddr, &len);
-      if (n < 0) {
-        perror("failed to receive message");
-        continue;
-      }
-
-      char address_str[INET6_ADDRSTRLEN];
-      inet_ntop(AF_INET6, &cliaddr.sin6_addr, address_str, INET6_ADDRSTRLEN);
-
-      printf("Received message from multicast... %s: %s\n", address_str, buf);
+      // memset(buf, 0, sizeof(buf));
+      notification msg;
+      recv_server_thread_notification(sock, &msg, (struct sockaddr *)&cliaddr, &len);
       loops++;
     }
-    close(sock);
+    close(sock);    
+    cleanup:
+      for (int j = 0; j < following; j++) {
+        free(addresses[j]);
+      }
+      free(addresses);
+      continue;
   }
-  return NULL;
 }
 
 int main(int argc, char* argv[]) {
-
-
   pthread_t tid;
-  pthread_create(&tid, NULL, multicast_receiver, NULL);
+  if (access(CLIENT_MCADDRESS, F_OK) != -1) {
+    pthread_create(&tid, NULL, multicast_receiver, NULL);
+  }
 
   int sock = socket(PF_INET6, SOCK_STREAM, 0);
   struct sockaddr_in6 adrso;
@@ -691,5 +727,8 @@ int main(int argc, char* argv[]) {
   cli(sock);
   // }
   close(sock);
+  if (access(CLIENT_MCADDRESS, F_OK) != -1) {
+    pthread_join(tid, NULL); // Wait for the thread to finish
+  }
   return EXIT_SUCCESS;
 }

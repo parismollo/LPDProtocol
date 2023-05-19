@@ -3,8 +3,6 @@
 - [ ] Fix CODEREQ too large. Context: When user tries to subscribe but is already, CODEREQ too large error is raised in the server side.
 - [ ] Bug - if more than one user creates an account (inscription) for some reason it does not work
 - [ ] Bug - affichage pas bon dans list tickets (--> �)
-- [ ] Organiser le code (si possible). Créer un dossier server et client. Mettre server.c dans server et client.c dans client. Decouper le code en plusieurs fichiers. Modifier le Makefile en conséquence
-
 ```bash
 paris@paris-pc:~/Documents/UniversiteParis/L3S6/PR6/megaphone_pr6$ ./client 
 Megaphone says: Hi user! What do you want to do?
@@ -19,12 +17,11 @@ Megaphone says: Type the numfil and the number of messages (e.g. 1 2)
 **Server notification**: CODEREQ: 3 ID: 1 NUMFIL: 1 :  NB: 1 
 **Server Notification**: NUMFIL: 1 ORIGIN: parismollo�parismollo PSEUDO: parismollo DATA: Hello World 
 paris@paris-pc:~/Documents/UniversiteParis/L3S6/PR6/megaphone_pr6$ 
-
 ```
 - [ ] download_file (client): fonction pour télécharger un fichier provenant d'un fil sur le server. (SIMILAIRE A recv_file de server.c) **CLIENT**
 - [ ] send_file (SERVEUR): fonction pour envoyer le fichier (correspondant a un certain fil) demandé au client (SIMILAIRE A send_file de client.c) **SERVEUR**
-- [ ] Read fil contents and send over in multicast messages
-- [ ] 
+- [ ] Organiser le code (si possible). Créer un dossier server et client. Mettre server.c dans server et client.c dans client. Decouper le code en plusieurs fichiers. Modifier le Makefile en conséquence
+
 
 ## Doing
 **Leopold**:
@@ -36,12 +33,22 @@ paris@paris-pc:~/Documents/UniversiteParis/L3S6/PR6/megaphone_pr6$
 - [ ] Attention. Au moment du stockage il faut recuperer le nom du fichier pas le chemin absolu. Par exemple avec fil6/file6.txt vers fil5 ca crash
 
 **Paris**:
+- [ ] **Server**: Read fil contents and send over in multicast messages
+  - [ ] sleep or wait for n seconds for notification loop
+  - [ ] loop over every multicast address, open fil and read/send last n messages (tmp) 
+  - [ ] only send notifications if fil has followers
+- [ ] **Client**: Read notifications messages - use something similar to process_ticket
+  
 
+**A intervalles de temps réguliers**, sur chaque adresse de multidiffusion associée à un fil, le serveur
+envoie des notifications des derniers billets publiés sur le fil, i.e. ceux qui ont été publiés pendant
+le dernier intervalle de temps. Ce sera à vous de choisir la valeur de l’intervalle de temps qui ne
+doit pas être trop court (sinon messages multidiffusés trop fréquents).
+Le client de l’utilisateur abonné à un ou plusieurs fils doit recevoir ces notifications en parallèle
+de ses autres activités.
 
 
 **Daniel**:
-
-
 
 ## Done
 
