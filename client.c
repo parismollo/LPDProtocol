@@ -567,7 +567,7 @@ int download_server_file(int sock, int num_fil, int UDP_port, char* filename) {
 
 int cli(int sock) {
   printf("Megaphone says: Hi user! What do you want to do?\n");
-  printf("(1) Inscription\n(2) Poster billet\n(3) Get billets\n(4) Abonner au fil\n(5) Send file\n(6) Download file\n(7) Close connection\n");
+  printf("(1) Subscription\n(2) Post ticket\n(3) Get tickets\n(4) Subscribe to fil\n(5) Send file\n(6) Download file\n(7) Close connection\n");
   int num, numfil;
   scanf("%d", &num);
   char filename[255];
