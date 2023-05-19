@@ -719,8 +719,10 @@ void * multicast_receiver(void * arg) {
 
 int main(int argc, char* argv[]) {
   pthread_t tid;
+  int thread_started = 0;
   if (access(CLIENT_MCADDRESS, F_OK) != -1) {
     pthread_create(&tid, NULL, multicast_receiver, NULL);
+    thread_started = 1;
   }
 
   int sock = socket(PF_INET6, SOCK_STREAM, 0);
@@ -736,7 +738,7 @@ int main(int argc, char* argv[]) {
   cli(sock);
   // }
   close(sock);
-  if (access(CLIENT_MCADDRESS, F_OK) != -1) {
+  if (thread_started) {
     pthread_join(tid, NULL); // Wait for the thread to finish
   }
   return EXIT_SUCCESS;
