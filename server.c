@@ -5,6 +5,9 @@
 #define DATABASE "server_users.data"
 #define INFOS "infos.data"
 
+// Permet de stocker l'adresse du dernier client connecté
+struct sockaddr_in6 CLIENT_ADDR;
+
 void print_connexion(struct sockaddr_in6 adrclient){
   char adr_buf[INET6_ADDRSTRLEN];
   memset(adr_buf, 0, sizeof(adr_buf));
@@ -34,30 +37,32 @@ int send_error(int sockclient, char* msg) {
   return 0;
 }
 
-int query(int sock, client_msg* msg) {
+int query_client(int sock, client_msg* msg) {
   msg->ID &= 0x07FF; // On garde que les 11 premiers bits 
   msg->CODEREQ &= 0x001F; // On garde que les 5 premiers bits
 
   // Combine le codereq (5 bits de poids faible) avec l'ID (11 bits restants)
   uint16_t res = ((uint16_t)msg->CODEREQ) | (msg->ID << 5);
   res = htons(res); 
-  if (send(sock, &res, sizeof(res), 0) < 0) return send_error(sock, "send failed"); 
+  if(send(sock, &res, sizeof(res), 0) < 0)
+    goto error;
 
   u_int16_t tmp = htons(msg->NUMFIL);
-  if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0) return send_error(sock, "send failed"); 
+  if(send(sock, &tmp, sizeof(u_int16_t), 0) < 0)
+    goto error;
 
   tmp = htons(msg->NB);
-  if (send(sock, &tmp, sizeof(u_int16_t), 0) < 0) return send_error(sock, "send failed");
-
-  if (send(sock, &msg->DATALEN, sizeof(u_int8_t), 0) < 0) return send_error(sock, "send failed");
-
-  if(msg->DATALEN > 0)
-    if (send(sock, msg->DATA, msg->DATALEN, 0) < 0) return send_error(sock, "send failed");
+  if(send(sock, &tmp, sizeof(u_int16_t), 0) < 0)
+    goto error;
 
   if(msg->CODEREQ == 4) {
-    if(send(sock, msg->multicast_addr, 16,0)<0) return send_error(sock, "send failed"); 
+    if(send(sock, msg->multicast_addr, 16,0) < 0)
+      goto error;
   }
   return 0;
+
+  error:
+    return send_error(sock, "send failed");
 }
 
 int notification_query(int sock, notification* msg, struct sockaddr_in6 grsock) {
@@ -155,7 +160,7 @@ int recv_client_subscription(int sockclient, client_msg* cmsg) {
   memset(&msg, 0, sizeof(msg));
   msg.ID = id;
   msg.CODEREQ = 1;
-  query(sockclient, &msg);
+  query_client(sockclient, &msg);
 
   return 0;
 }   
@@ -223,7 +228,7 @@ int notify_ticket_reception(int sock, u_int8_t CODEREQ, uint8_t ID, int NUMFIL) 
   strncpy(notification.DATA, ticket_created, strlen(ticket_created));
   notification.DATALEN = strlen(notification.DATA);
 
-  return query(sock, &notification);
+  return query_client(sock, &notification);
 }
 
 // Permet de recupérer un message d'un client et de le publier sur un fil
@@ -578,29 +583,35 @@ int send_msg_ticket(int sockclient, uint16_t numfil, char* origine, message msg)
   
   numfil = htons(numfil);
   if(send(sockclient, &numfil, sizeof(numfil), 0) < 0)
-    return send_error(sockclient, "send failed");
+    goto error;
   // origine est sur 10 octets. 11 pour le '\0'
   replace_after(origine, '\n', '#', 11); // On place des '#' pour combler à la fin
   replace_after(msg.pseudo, '\0', '#', 11); // De meme pour le pseudo
+  
   // On envoie l'origine (pseudo createur du fil)
   if(send(sockclient, origine, 10, 0) < 0)
-    return send_error(sockclient, "send failed"); 
+     goto error;
+
   // On envoie le pseudo de celui qui a envoye le msg
   if(send(sockclient, msg.pseudo, 10, 0) < 0)
-    return send_error(sockclient, "send failed"); 
+    goto error;
 
   // Ne peut pas depasser 255
   uint8_t data_len = (uint8_t) strlen(msg.text);
 
   // On envoie DATA_LEN
   if(send(sockclient, &data_len, sizeof(uint8_t), 0) < 0)
-    return send_error(sockclient, "send failed"); 
+    goto error;
 
-  // On envoie le text du message (DATA)
-  if(send(sockclient, msg.text, data_len, 0) < 0)
-    return send_error(sockclient, "send failed"); 
-
+  if(data_len > 0) {
+    // On envoie le text du message (DATA)
+    if(send(sockclient, msg.text, data_len, 0) < 0)
+      goto error;
+  }
   return 0;
+
+  error:
+    return send_error(sockclient, "send failed");
 }
 
 int list_tickets(int sockclient, client_msg* msg) {
@@ -642,7 +653,7 @@ int list_tickets(int sockclient, client_msg* msg) {
     response.NB = total_msg_fils(msg->NB);
   }
 
-  if(query(sockclient, &response) < 0)
+  if(query_client(sockclient, &response) < 0)
     return send_error(sockclient, "error: send entete list_tickets");
 
   /*
@@ -770,7 +781,7 @@ int subscription_fil(int sockclient, client_msg* msg){
   response.NUMFIL = msg->NUMFIL;
   response.NB = 0;
   inet_pton(AF_INET6, multicast_addr, response.multicast_addr);
-  if(query(sockclient, &response) < 0) {
+  if(query_client(sockclient, &response) < 0) {
     free(multicast_addr);
     return send_error(sockclient, "error: could not confirm subscription");
   }
@@ -792,7 +803,7 @@ int send_file_to_client(int clientsock, client_msg* msg) {
   msg->DATALEN = 0;
   memset(msg->DATA, 0, 256);
 
-  if(query(clientsock, msg) < 0) {
+  if(query_client(clientsock, msg) < 0) {
     return send_error(clientsock, "error: cannot send msg in download_client_file");
   }
 
@@ -803,17 +814,21 @@ int send_file_to_client(int clientsock, client_msg* msg) {
   int UDP_port = msg->NB;
 
   // Adresse de destination
-  struct sockaddr_in6 clientadr;
-  memset(&clientadr, 0, sizeof(clientadr));
-  clientadr.sin6_family = AF_INET6;
-  inet_pton(AF_INET6, "::1", &clientadr.sin6_addr); // TODO: POUR L INSTANT ON MET ::1. ATTENTION A MODIFIER PAR LA VRAI ADRESSE DU CLIENT QU ON RECUPERE DANS ACCEPT !!
-  clientadr.sin6_port = UDP_port;
+  // struct sockaddr_in6 clientadr;
+  // memset(&clientadr, 0, sizeof(clientadr));
+  // clientadr.sin6_family = AF_INET6;
+  // inet_pton(AF_INET6, "::1", &clientadr.sin6_addr); // TODO: POUR L INSTANT ON MET ::1. ATTENTION A MODIFIER PAR LA VRAI ADRESSE DU CLIENT QU ON RECUPERE DANS ACCEPT !!
+  // clientadr.sin6_port = UDP_port;
+
+  // On récupère le sockaddr_in6 du dernier client
+  // On modifie le port
+  CLIENT_ADDR.sin6_port = UDP_port;
 
   char file_path[1024];
   memset(file_path, 0, 1024);
   sprintf(file_path, "fil%d/%s", msg->NUMFIL, file_name);
 
-  if(send_file(clientadr, *msg, file_path) < 0) {
+  if(send_file(CLIENT_ADDR, *msg, file_path) < 0) {
     print_error("error send file with UDP");
     return -1;
   }
@@ -831,7 +846,7 @@ int download_client_file(int clientsock, client_msg* msg, int UDP_port) {
   msg->NB = UDP_port;
   msg->DATALEN = 0;
 
-  if(query(clientsock, msg) < 0) {
+  if(query_client(clientsock, msg) < 0) {
     return send_error(clientsock, "error: cannot send msg in download_client_file");
   }
 
@@ -1127,14 +1142,14 @@ int main(int argc, char** args) {
   // *mcport = NOTIFICATION_UDP_PORT;
   if(pthread_create(&multicast_tid, NULL, multicast_thread, NULL) < 0) {
     perror("pthread_create failed");
-    exit(1);
+    return 1;
   }
 
   //*** creation de la socket serveur ***
   int sock = socket(PF_INET6, SOCK_STREAM, 0);
-  if(sock < 0){
+  if(sock < 0) {
     perror("creation socket");
-    exit(1);
+    return 1;
   }
   
   //*** creation de l'adresse du destinataire (serveur) ***
@@ -1146,42 +1161,51 @@ int main(int argc, char** args) {
 
   // Pour avoir une socket polymorphe : 
   int no = 0;
-  int ret = setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &no, sizeof(no));
-  if (ret < 0) {
-    fprintf(stderr, "échec de setsockopt() : (%d)\n", errno);
+  int r = setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &no, sizeof(no));
+  if(r < 0) {
+    fprintf(stderr, "Echec de setsockopt() : (%d)\n", errno);
+    return 1;
   }
   
   int yes = 1;
-  int r = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+  r = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+  if(r < 0) {
+    fprintf(stderr, "Echec de setsockopt() : (%d)\n", errno);
+    close(sock);
+    return 1;
+  }
+
   //*** on lie la socket au port PORT ***
   r = bind(sock, (struct sockaddr *) &address_sock, sizeof(address_sock));
-  if (r < 0) {
+  if(r < 0) {
     perror("erreur bind");
-    exit(2);
+    close(sock);
+    return 1;
   }
 
   //*** Le serveur est pret a ecouter les connexions sur le port PORT ***
   r = listen(sock, 0);
-  if (r < 0) {
+  if(r < 0) {
     perror("erreur listen");
-    exit(2);
+    close(sock);
+    return 1;
   }
 
-  struct sockaddr_in6 client_addr;
-  socklen_t cli_len = sizeof(client_addr);
-
+  socklen_t cli_len = sizeof(CLIENT_ADDR);
   while(1) {
-      //*** le serveur accepte une connexion et cree la socket de communication avec le client ***
-    int sockclient = accept(sock, (struct sockaddr *) &client_addr, &cli_len);
-    if(sockclient == -1){
+    //*** le serveur accepte une connexion et cree la socket de communication avec le client ***
+    memset(&CLIENT_ADDR, 0, sizeof(struct sockaddr_in6));
+    int sockclient = accept(sock, (struct sockaddr *) &CLIENT_ADDR, &cli_len);
+    if(sockclient == -1) {
       perror("probleme socket client");
       exit(1);
     }
-    switch (fork()) {
+    switch(fork()) {
     case -1:
       break;
     case 0:
       close(sock);
+      print_connexion(CLIENT_ADDR);
       return recv_client_msg(sockclient);
     default:
       close(sockclient);

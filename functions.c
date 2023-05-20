@@ -82,7 +82,7 @@ void free_list(Node* head) {
   }
 }
 
-int send_file(struct sockaddr_in6 servadr, client_msg msg, char* file_path) {
+int send_file(struct sockaddr_in6 addr, client_msg msg, char* file_path) {
   // On crée le socket UDP
   int sock_udp = socket(PF_INET6, SOCK_DGRAM, 0);
   if (sock_udp < 0) {
@@ -99,7 +99,7 @@ int send_file(struct sockaddr_in6 servadr, client_msg msg, char* file_path) {
 
   FilePacket packet;
   memset(&packet, 0, sizeof(packet));
-  socklen_t len = sizeof(servadr);
+  socklen_t len = sizeof(addr);
 
   // Combine le codereq (5 bits de poids faible) avec l'ID (11 bits restants)
   packet.codreq_id = ((uint16_t)msg.CODEREQ) | (msg.ID << 5);
@@ -114,7 +114,7 @@ int send_file(struct sockaddr_in6 servadr, client_msg msg, char* file_path) {
     packet.num_bloc = htons(num_bloc);
 
     printf("SEND PACKET, SIZE: %d\n", nb_read);
-    if (sendto(sock_udp, &packet, sizeof(packet), 0, (struct sockaddr *)&servadr, len) < 0) {
+    if(sendto(sock_udp, &packet, sizeof(packet), 0, (struct sockaddr *)&addr, len) < 0) {
       close(sock_udp);
       fprintf(stderr, "send failed");
       return -1;
@@ -147,7 +147,24 @@ Node* download_file(int UDP_port, int ID, int CODREQ) {
   address_sock.sin6_port = UDP_port; // Pas de htons ici pour bind !
   address_sock.sin6_addr = in6addr_any;
 
-  printf("PORT:%d\n", address_sock.sin6_port);
+  printf("PORT UDP : %d\n", address_sock.sin6_port);
+
+  // Pour avoir une socket polymorphe : 
+  int no = 0;
+  int r = setsockopt(sock_udp, IPPROTO_IPV6, IPV6_V6ONLY, &no, sizeof(no));
+  if(r < 0) {
+    fprintf(stderr, "Echec de setsockopt() : (%d)\n", errno);
+    close(sock_udp);
+    return NULL;
+  }
+  
+  int yes = 1;
+  r = setsockopt(sock_udp, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+  if(r < 0) {
+    fprintf(stderr, "Echec de setsockopt() : (%d)\n", errno);
+    close(sock_udp);
+    return NULL;
+  }
 
   if (bind(sock_udp, (struct sockaddr *)&address_sock, sizeof(address_sock)) < 0) {
     perror("Error bind");
