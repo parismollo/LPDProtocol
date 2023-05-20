@@ -499,7 +499,7 @@ int get_last_messages(int nb, int fil, message* messages) {
   }
 
   if(num_lines < nb * 2) {
-    fprintf(stderr, "il y a moins de %d msg\n", nb);
+    fprintf(stderr, "there is less than %d msg\n", nb);
     close(fd);
     return -1;
   }
@@ -871,24 +871,24 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
 
   u_int8_t req = msg->CODEREQ;
   if(req > 6 || req < 1) {
-    send_error(socket, "le code de requete doit être entre 1 et 6");
+    send_error(socket, "the query code must be between 1 and 6");
     return -1;
   }
   if(req != 1) { // Verify that the user is regitered
     if(!is_user_registered(msg->ID)) {
-      send_error(socket, "veuillez-vous inscrire");
+      send_error(socket, "Please register");
       return -1;
     }
 
   }
   if(req > 2) { // Verifie que le fil existe
     if(msg->NUMFIL < 0 || msg->NUMFIL > nb_fils()) {
-        send_error(socket, "Ce fil n'existe pas");
+        send_error(socket, "This fil doesn't exist");
         return -1;
       }
     if(req == 4 || req == 6){//Pour s'abonner ou télécharger, on ne peut pas donner le numéro de fil 0
       if(msg->NUMFIL == 0){
-        send_error(socket, "Veuillez donner un numéro de fil valide");
+        send_error(socket, "Please provide a valid fil number");
         return -1;
       }
     }
@@ -905,7 +905,7 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
 
       // Vérification du pseudo
       if (strlen(pseudo) == 0) {
-        send_error(socket, "Le pseudo est vide");
+        send_error(socket, "Username is empty");
         return -1;
       }
       // If pseudo is valid, call the appropriate function
@@ -930,10 +930,10 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
       } 
       return subscription_fil(socket, msg);
     case 5:
-      printf("Reception d'un fichier client...\n");
+      printf("Reception of a client file...\n");
       return download_client_file(socket, msg, DEFAULT_UDP_PORT);
     case 6:
-      printf("Envoie d'un fichier...\n");
+      printf("Sending a file...\n");
       return send_file_to_client(socket, msg);
   }
   send_error(socket, "issue in function validate_and_exec_msg");
@@ -1019,7 +1019,7 @@ int broadcast(char * filpath, int port, int numfil) {
   int ifindex = if_nametoindex("enp4s0"); // TODO: Change this (I know it's for testing)
   
   if(setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_IF, &ifindex, sizeof(ifindex))) {
-    perror("erreur initialisation de l'interface locale");
+    perror("Error initializing the local interface.");
     return 1;
   }
 
@@ -1111,14 +1111,14 @@ int main(int argc, char** args) {
   int no = 0;
   int r = setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &no, sizeof(no));
   if(r < 0) {
-    fprintf(stderr, "Echec de setsockopt() : (%d)\n", errno);
+    fprintf(stderr, "Failure of setsockopt() : (%d)\n", errno);
     return 1;
   }
   
   int yes = 1;
   r = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
   if(r < 0) {
-    fprintf(stderr, "Echec de setsockopt() : (%d)\n", errno);
+    fprintf(stderr, "Failure of setsockopt() : (%d)\n", errno);
     close(sock);
     return 1;
   }
@@ -1145,7 +1145,7 @@ int main(int argc, char** args) {
     memset(&CLIENT_ADDR, 0, sizeof(struct sockaddr_in6));
     int sockclient = accept(sock, (struct sockaddr *) &CLIENT_ADDR, &cli_len);
     if(sockclient == -1) {
-      perror("probleme socket client");
+      perror("issue with socket client");
       exit(1);
     }
     switch(fork()) {

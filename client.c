@@ -203,10 +203,7 @@ int query_subscription(int sock, char* pseudo) {
     return 0;
 }
 
-// Permet de récupérer un certain nombre de billets pour un numéro de fil donné. 
-// Elle crée une structure client_msg avec le code de requête 3 (récupération de billets), 
-// le numéro de fil et le nombre de billets demandés,    
-// puis appelle la fonction query_server pour envoyer la requête au serveur.
+
 int process_ticket(int sock) {
   
   // read numfil

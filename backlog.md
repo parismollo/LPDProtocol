@@ -50,6 +50,8 @@ de ses autres activités.
 
 **Daniel**:
 
+[ ] Améliorer la structure du code (+ diagramme)
+
 ## Done
 
 - [x] Recevoir un billet (creation de fil si nécessaire, check id, bla bla)
