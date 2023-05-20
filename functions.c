@@ -231,3 +231,7 @@ Node* download_file(int UDP_port, int ID, int CODREQ) {
 
   return packets_list;
 }
+
+void print_error(char * message) {
+  fprintf(stderr, "\033[32m[Server Log]:\033[0m \033[31m%s\n\033[0m", message);
+}

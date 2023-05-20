@@ -89,7 +89,7 @@ int server_notification_post(int sockclient, client_msg* cmsg) {
     return send_error(sockclient, "error DATALEN");
   }
 
-  printf("[Server response]: CODEREQ: %d ID: %d NUMFIL: %d DATA: %s\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->DATA);
+  printf("\033[32m[Server response]\033[0m: CODEREQ: %d ID: %d NUMFIL: %d DATA: %s\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->DATA);
 
   return 0;
 }
@@ -135,7 +135,7 @@ int query(int sock, client_msg* msg) {
 
     if (send(sock, &(msg->DATALEN), sizeof(u_int8_t), 0) < 0)
       return send_error(sock, "send failed");
-    printf("DATA: %s\n", msg->DATA);
+    // printf("DATA: %s\n", msg->DATA);
 
     if(msg->DATALEN > 0) {
       if (send(sock, msg->DATA, msg->DATALEN, 0) < 0)
@@ -175,7 +175,7 @@ int query_subscription(int sock, char* pseudo) {
     codereq = (res & 0x001F); // On mask avec 111110000..
     if (codereq == 31) return 1;
     id = (res & 0xFFE0) >> 5;
-    printf("[Server response]: CODEREQ: %d ID: %d\n", codereq, id);
+    printf("\033[32m[Server response]\033[0m: CODEREQ: %d ID: %d\n", codereq, id);
     
     if(codereq != 1) {
         fprintf(stderr, "error codereq != 1");
@@ -241,11 +241,11 @@ int process_ticket(int sock) {
       free(data);
       return send_error(sock, "recv failed6");
     }
-    printf("[Server response]: NUMFIL: %hu ORIGIN: %s PSEUDO: %s DATALEN: %d DATA: %s\n", numfil, origine, pseudo, len, data);
+    printf("\033[32m[Server response]\033[0m: NUMFIL: %hu ORIGIN: %s PSEUDO: %s DATALEN: %d DATA: %s\n", numfil, origine, pseudo, len, data);
     free(data);
   }
   else {
-    printf("[Server response]: NUMFIL: %hu ORIGIN: %s PSEUDO: %s, DATALEN: %d\n", numfil, origine, pseudo, len);
+    printf("\033[32m[Server response]\033[0m: NUMFIL: %hu ORIGIN: %s PSEUDO: %s, DATALEN: %d\n", numfil, origine, pseudo, len);
   }
 
   return 0;
@@ -279,7 +279,7 @@ int server_notification_get(int sock, client_msg* cmsg) {
   }
   cmsg->NB = ntohs(res);
 
-  printf("[Server response]: CODEREQ: %d ID: %d NUMFIL: %d :  NB: %d\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->NB);
+  printf("\033[32m[Server response]\033[0m: CODEREQ: %d ID: %d NUMFIL: %d :  NB: %d\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->NB);
 
   // Handle next n messages
   for(int i=0; i<cmsg->NB; i++) {
@@ -343,7 +343,7 @@ int server_notification_subscription(int sock, client_msg * cmsg) {
     perror("failed to save multicast address");
     return 1;
   }
-  printf("[Server response]: CODEREQ: %d ID: %d NUMFIL: %d  NB: %d ADDRM: %s\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->NB, addrmult_str);
+  printf("\033[32m[Server response]\033[0m: CODEREQ: %d ID: %d NUMFIL: %d  NB: %d ADDRM: %s\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->NB, addrmult_str);
   return 0;
 }
 
@@ -362,6 +362,27 @@ int get_tickets(int sock, int num_fil, int nombre_billets) {
     return 1; 
 }
 
+int sumNumbersInFiles(int numbers[], int size) {
+  int sum = 0;
+  for (int i = 0; i < size; i++) {
+    char filename[50];
+    snprintf(filename, sizeof(filename), "fil%d/fil%d.info", numbers[i], numbers[i]);
+
+    FILE *file = fopen(filename, "r");
+    if (file != NULL) {
+      char line[100];
+      if (fgets(line, sizeof(line), file) != NULL) {
+        sum += atoi(line);
+      } else {
+        // printf("Error reading from file: %s\n", filename);
+      }
+      fclose(file);
+    } else {
+      // printf("Error opening file: %s\n", filename);
+    }
+  }
+  return sum;
+}
 // Permet de s'abonner à un fil de discussion en envoyant une requête avec le code 4 (abonnement à un fil) 
 // et le numéro de fil souhaité. Elle utilise également la fonction query pour envoyer la requête au serveur.
 int subscribe_to_fil(int sock, int num_fil) {
@@ -422,7 +443,7 @@ int recv_server_query(int sock, client_msg* cmsg, int data) {
       return 1;
     }
   }
-  printf("**Server notification**: CODEREQ: %d ID: %d NUMFIL: %d :  NB: %d\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->NB);
+  printf("\033[32m[Server notification]\033[0m: CODEREQ: %d ID: %d NUMFIL: %d NB: %d\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->NB);
 
   return 0;
 }
@@ -457,7 +478,7 @@ int recv_server_thread_notification(int sock, notification* cmsg, struct sockadd
   cmsg->PSEUDO[10] = '\0';
   cmsg->DATA[20] = '\0';
 
-  printf("**Server notification**: CODEREQ: %d ID: %d NUMFIL: %d :  PSEUDO: %s DATA: %s\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->PSEUDO, cmsg->DATA);
+  printf("\033[32m[Server notification]\033[0m: CODEREQ: %d ID: %d NUMFIL: %d PSEUDO: %s DATA: %s\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->PSEUDO, cmsg->DATA);
 
   return 0;
 }
@@ -480,7 +501,6 @@ int send_file_to_server(int sock, int num_fil, char* file_path) {
   if (query(sock, &msg) != 0)
     return send_error(sock, "Error send query\n");
 
-  //printf("**Server notification**: CODEREQ: %d ID: %d NUMFIL: %d DATA: %s\n", msg.CODEREQ, msg.ID, msg.NUMFIL, msg.DATA);
   client_msg s_msg;
   if(recv_server_query(sock, &s_msg, 0) != 0)
     return send_error(sock, "error recv from server\n");
@@ -565,6 +585,26 @@ int download_server_file(int sock, int num_fil, int UDP_port, char* filename) {
   return 0;
 }
 
+void extractNumbers(char *addresses[], int output[], int size) {
+  int i;
+  for (i = 0; i < size; i++) {
+    char *start = strstr(addresses[i], "::");
+    if (start != NULL) {
+      char *end = strstr(start + 2, ":0:0");
+      if (end != NULL) {
+          char value[5];
+          strncpy(value, start + 2, end - (start + 2));
+          value[end - (start + 2)] = '\0';
+          output[i] = atoi(value);
+      } else {
+          printf("No valid end found in address %s\n", addresses[i]);
+      }
+    } else {
+      printf("No valid start found in address %s\n", addresses[i]);
+    }
+  }
+}
+
 int cli(int sock) {
   printf("Megaphone says: Hi user! What do you want to do?\n");
   printf("(1) Subscription\n(2) Post ticket\n(3) Get tickets\n(4) Subscribe to fil\n(5) Send file\n(6) Download file\n(7) Close connection\n");
@@ -576,7 +616,7 @@ int cli(int sock) {
   {
   case 1:
     if(!check_subscription()) {
-      printf("[Server response]: Type your username: \n");
+      printf("\033[32m[Server response]\033[0m: Type your username: \n");
       char username[100];
       scanf("%99s", username);
       query_subscription(sock, username);
@@ -587,22 +627,22 @@ int cli(int sock) {
     }
   case 2:
     check_subscription();
-    printf("[Server response]: Type the numfil \n");
+    printf("\033[32m[Server response]\033[0m: Type the numfil \n");
     scanf("%d", &numfil);
-    printf("[Server response]: Enter your message \n");
+    printf("\033[32m[Server response]\033[0m: Enter your message \n");
     char data[100];
     scanf(" %[^\n]", data);
     data[99] = '\0';
     return send_ticket(sock, numfil, data);
   case 3:
     check_subscription();
-   printf("[Server response]: Type the numfil and the number of messages (e.g. 1 2) \n");
+   printf("\033[32m[Server response]\033[0m: Type the numfil and the number of messages (e.g. 1 2) \n");
    int a, b;
    scanf("%d %d", &a, &b);
    return get_tickets(sock, a, b);
   case 4:
     check_subscription();
-    printf("[Server response]: Type the numfil \n");
+    printf("\033[32m[Server response]\033[0m: Type the numfil \n");
     int num;
     scanf("%d", &num);
     return subscribe_to_fil(sock, num);
@@ -624,7 +664,7 @@ int cli(int sock) {
     printf("Megaphone says: Closing connection...\n");
     return -1;
   default:
-    printf("[Server response]: Nothing here so far...\n");
+    printf("\033[32m[Server response]\033[0m: Nothing here so far...\n");
     return -1;
   }
   return 0;
@@ -632,7 +672,6 @@ int cli(int sock) {
 
 void * multicast_receiver(void * arg) {
   while(1) {
-    int port = 4321; // tmp
     int max = 10; // tmp
     char ** addresses = malloc(sizeof(char *) * max);
     FILE * file = fopen(CLIENT_MCADDRESS, "r");
@@ -643,7 +682,11 @@ void * multicast_receiver(void * arg) {
 
     if (file == NULL) {
       perror("Failed to open file");
-      goto cleanup;
+      for (int j = 0; j < following; j++) {
+        free(addresses[j]);
+      }
+      free(addresses);
+      continue;
     }
 
     while(fgets(buffer, address_len, file) != NULL) {
@@ -658,6 +701,13 @@ void * multicast_receiver(void * arg) {
     // Print addresses
     // for (int j = 0; j < following; j++) {
     //     printf("%s\n", addresses[j]);
+    // }
+    int all_fils_sub[following];
+    extractNumbers(addresses, all_fils_sub, following);
+    int sumofnotifications = sumNumbersInFiles(all_fils_sub, following);
+    // Print the extracted values
+    // for (int i = 0; i < following; i++) {
+    //     printf("Number from address %s: %d\n", addresses[i], all_fils_sub[i]);
     // }
 
     int sock;
@@ -677,7 +727,7 @@ void * multicast_receiver(void * arg) {
     memset(&grsock, 0, sizeof(grsock));
     grsock.sin6_family = AF_INET6;
     grsock.sin6_addr = in6addr_any;
-    grsock.sin6_port = htons(port);
+    grsock.sin6_port = htons(NOTIFICATION_UDP_PORT);
 
     if(bind(sock, (struct sockaddr*) &grsock, sizeof(grsock))) {
       perror("echec de bind");
@@ -685,7 +735,7 @@ void * multicast_receiver(void * arg) {
       goto cleanup;
     }
 
-    int ifindex = if_nametoindex ("wlp2s0"); //tmp
+    int ifindex = 0; //tmp
 
     for(int j=0; j<following; j++) {
       struct ipv6_mreq group;
@@ -701,8 +751,13 @@ void * multicast_receiver(void * arg) {
     struct sockaddr_in6 cliaddr;
     socklen_t len = sizeof(cliaddr);
     int loops = 0;
-    while (loops < following) {
-      // memset(buf, 0, sizeof(buf));
+    // x = sum total number of new messages over all subscribed fils
+    // loop x times instead of up to following
+    while (loops < sumofnotifications) {
+      // char buf[50];
+      // sprintf(buf, "fil%d/fil%d.info", loops+1, loops+1);
+      // FILE *file = fopen(buf, "r");
+       //tmp
       notification msg;
       recv_server_thread_notification(sock, &msg, (struct sockaddr *)&cliaddr, &len);
       loops++;
@@ -718,6 +773,7 @@ void * multicast_receiver(void * arg) {
 }
 
 int main(int argc, char* argv[]) {
+  
   pthread_t tid;
   int thread_started = 0;
   if (access(CLIENT_MCADDRESS, F_OK) != -1) {

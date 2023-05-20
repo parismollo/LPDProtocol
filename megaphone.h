@@ -19,6 +19,7 @@
 #include <sys/types.h>
 
 #define DEFAULT_UDP_PORT 33333
+#define NOTIFICATION_UDP_PORT 4321
 
 // STRUCTURES
 typedef struct {
@@ -63,6 +64,7 @@ int change_infos(char* key, char* new_value);
 int query(int sock, client_msg* msg);
 void replace_after(char* str, char target, char replace_char, size_t maxsize);
 int prefix(char* str, char* pre);
+void print_error(char * message);
 
 // Send/Download file
 void insert_packet_sorted(Node** head, FilePacket packet);
