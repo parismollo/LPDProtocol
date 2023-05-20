@@ -3,6 +3,8 @@
 - [ ] Fix CODEREQ too large. Context: When user tries to subscribe but is already, CODEREQ too large error is raised in the server side.
 - [ ] Bug - if more than one user creates an account (inscription) for some reason it does not work
 - [ ] Bug - affichage pas bon dans list tickets (--> �)
+- [ ] need for mutex in threads?
+
 ```bash
 paris@paris-pc:~/Documents/UniversiteParis/L3S6/PR6/megaphone_pr6$ ./client 
 Megaphone says: Hi user! What do you want to do?
@@ -33,21 +35,10 @@ paris@paris-pc:~/Documents/UniversiteParis/L3S6/PR6/megaphone_pr6$
 - [ ] Attention. Au moment du stockage il faut recuperer le nom du fichier pas le chemin absolu. Par exemple avec fil6/file6.txt vers fil5 ca crash
 
 **Paris**:
-- [ ] **Server**: Read fil contents and send over in multicast messages
-  - [ ] sleep or wait for n seconds for notification loop
-  - [ ] loop over every multicast address, open fil and read/send last n messages (tmp) 
-  - [ ] only send notifications if fil has followers
-- [ ] **Client**: Read notifications messages - use something similar to process_ticket
-  
-
-**A intervalles de temps réguliers**, sur chaque adresse de multidiffusion associée à un fil, le serveur
-envoie des notifications des derniers billets publiés sur le fil, i.e. ceux qui ont été publiés pendant
-le dernier intervalle de temps. Ce sera à vous de choisir la valeur de l’intervalle de temps qui ne
-doit pas être trop court (sinon messages multidiffusés trop fréquents).
-Le client de l’utilisateur abonné à un ou plusieurs fils doit recevoir ces notifications en parallèle
-de ses autres activités.
-
-
+- [x] Notification feature. 
+  - [x] Set dynamic index on multicasting functions
+  - [x] Send (server) only new created messages / and receive it (client). Every time I post a message into a fil, I create (if not existant) a file that holds the number of messages created during the interval of the thread, once that interval is done, I open that file and read so I know how many messages to send, then I erase to 0. This will define the paremeter of get_last_billets.
+  - [x] DATA contient les 20 premiers caractères du texte (le texte complété par des caractères nuls (’\0’) s’il fait moins de 20 caractères).
 **Daniel**:
 
 [ ] Améliorer la structure du code (+ diagramme)

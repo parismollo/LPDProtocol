@@ -13,11 +13,10 @@ void print_connexion(struct sockaddr_in6 adrclient){
   memset(adr_buf, 0, sizeof(adr_buf));
   
   inet_ntop(AF_INET6, &(adrclient.sin6_addr), adr_buf, sizeof(adr_buf));
-  printf("adresse client : IP: %s port: %d\n", adr_buf, ntohs(adrclient.sin6_port));
 }
 
 int send_error(int sockclient, char* msg) {
-  fprintf(stderr, "%s\n", msg);
+  print_error(msg);
 
   if(sockclient < 0)
     return 1;
@@ -189,6 +188,33 @@ int nb_msg_fil(int fil) {
   return atoi(buf);
 }
 
+void updateFileInfo(char *filepath, int reset) {
+    FILE *file = fopen(filepath, "r");
+    int number = 0;  // initialize number to 0
+
+    if (file != NULL) {
+        if (fscanf(file, "%d", &number) == 1) {
+            number++;
+        }
+        fclose(file);
+    }
+
+    if (reset) {
+        number = 0;
+    }
+
+    file = fopen(filepath, "w");
+    if (file == NULL) {
+      print_error("Error opening/creating the file for writing");
+      return;
+    }
+
+    fprintf(file, "%d\n", number);
+    fclose(file);
+}
+
+
+
 int notify_ticket_reception(int sock, u_int8_t CODEREQ, uint8_t ID, int NUMFIL) {
   // Once ticket created successfully
   // notify client
@@ -230,12 +256,18 @@ int handle_ticket(int socket, client_msg* msg, int notify) {
     return send_error(socket, "This fil does not exists"); //tmp
   }
   // On récupère le nombre de message dans le fil
+  
   int nb_msg = nb_msg_fil(msg->NUMFIL);
+  
+  char otherbuf[50];
+  memset(otherbuf, 0, sizeof(otherbuf));
+  sprintf(otherbuf, "fil%d/fil%d.info", msg->NUMFIL, msg->NUMFIL);
+  updateFileInfo(otherbuf, 0);
 
   // On récupère  le pseudo du client
   char pseudo[11];
   if(get_pseudo(msg->ID, pseudo, 11) != 0) {
-    fprintf(stderr, "Erreur: impossible de recuperer le pseudo\n");
+    print_error("Erreur: impossible de recuperer le pseudo");
     return 1;
   }
 
@@ -287,7 +319,6 @@ int get_pseudo(int id, char* pseudo, size_t pseudo_size) {
   memset(buf, 0, 1024);
   char* ptr, *sep = " \n";
   while(fgets(buf, 1024, f) != NULL) {
-    // printf("buf: %s\n", buf);
     ptr = strtok(buf, sep);
     if(ptr == NULL)
       return 1;
@@ -347,14 +378,16 @@ int get_infos(char* key, char* value, size_t val_size) {
         ptr = strtok(NULL, delim);
         if(ptr == NULL) {
           // Le fichier est mal formé
+          fclose(file);
           return -1;
         }
         strncpy(value, ptr, val_size);
+        fclose(file);
         return 0;
       }
     }
   }
-  
+  fclose(file);
   return -1;
 }
 
@@ -365,7 +398,7 @@ int change_infos(char* key, char* new_value) {
 
   FILE * dest = fopen("temp", "w");
   if (dest == NULL) {
-    fprintf(stderr, "change_infos failed");
+    print_error("change_infos failed");
     return 1;
   }
 
@@ -451,6 +484,7 @@ int readline(int fd, char* line, size_t buf_size) {
   return 2; // Ligne trop grande
 }
 
+
 int get_last_messages(int nb, int fil, message* messages) {
   // Open fil
   // get nb last msg
@@ -499,7 +533,7 @@ int get_last_messages(int nb, int fil, message* messages) {
   }
 
   if(num_lines < nb * 2) {
-    fprintf(stderr, "there is less than %d msg\n", nb);
+    fprintf(stderr, "\033[31mthere is less than %d msg\033[0m\n", nb);
     close(fd);
     return -1;
   }
@@ -512,7 +546,6 @@ int get_last_messages(int nb, int fil, message* messages) {
     // On lit l'ID
     readline(fd, line, 1024); // GESTION ERREURS
     if(!prefix(line, "ID:")) {
-      // printf("line %s\n", line);
       goto bad_file_format;
     }
     // On découpe la ligne en: [ID, 123, PSEUDO, leo]
@@ -542,7 +575,7 @@ int get_last_messages(int nb, int fil, message* messages) {
   bad_file_format:
     if(fd)
       close(fd);
-    fprintf(stderr, "Bad file fil format\n");
+    print_error("Bad file fil format");
     return -1;
 }
 
@@ -656,9 +689,7 @@ int list_tickets(int sockclient, client_msg* msg) {
       return -1;
     }
 
-    // printf("NB MSG: %d\n", nb_msg);
     for(int j=0;j<nb_msg;j++) {
-      // printf("x\n");*
       if(send_msg_ticket(sockclient, i, initator, messages[j]) != 0) {
         // send error
         free(messages);
@@ -684,7 +715,6 @@ int is_user_registered(int id) {
 
   while(fgets(buffer, sizeof(buffer), f) > 0) {
     int current_id = atoi(strtok(buffer, " "));
-    // printf("current id: %d\n", current_id);
     if(current_id == id) {
       fclose(f);
       return 1;
@@ -710,10 +740,8 @@ char * generate_multicast_address_ipv6(int group_id) {
 }
 
 char * get_multicast_address(int numfil){
-  // printf("here\n");
   char buffer[256];
   sprintf(buffer, "fil%d/multicast_address_fil_%d.txt", numfil, numfil);
-  // fprintf("buffer file name: %s\n", buffer);
   struct stat st;
   if (stat(buffer, &st) == 0) { // file exists
     char* address = malloc(40);
@@ -733,10 +761,7 @@ char * get_multicast_address(int numfil){
     fclose(file);
     free(address);
   } // file does not exist
-  // printf("herex\n");
   char* address = generate_multicast_address_ipv6(numfil);
-  printf("%ld\n", strlen(address));
-  // printf("%s\n", address);
   FILE* file = fopen(buffer, "w");
   if(file == NULL) return NULL;
   fprintf(file, "%s", address);
@@ -804,7 +829,7 @@ int send_file_to_client(int clientsock, client_msg* msg) {
   sprintf(file_path, "fil%d/%s", msg->NUMFIL, file_name);
 
   if(send_file(CLIENT_ADDR, *msg, file_path) < 0) {
-    fprintf(stderr, "error send file with UDP\n");
+    print_error("error send file with UDP");
     return -1;
   }
 
@@ -830,7 +855,7 @@ int download_client_file(int clientsock, client_msg* msg, int UDP_port) {
 
   Node* packets_list = NULL;
   if((packets_list = download_file(msg->NB, msg->ID, msg->CODEREQ)) == NULL) {
-    fprintf(stderr, "Error in download_file\n");
+    print_error("Error in download_file");
     return -1;
   }
 
@@ -856,7 +881,7 @@ int download_client_file(int clientsock, client_msg* msg, int UDP_port) {
 
   // On écrit les paquets dans le fichier
   if(write_packets_to_file(packets_list, file_path) < 0) {
-    fprintf(stderr, "Erreur lors de l'écriture des packets dans le fichier\n");
+    print_error("Erreur lors de l'écriture des packets dans le fichier");
     free_list(packets_list);
     return -1;
   }
@@ -960,7 +985,6 @@ int recv_client_msg(int sockclient) {
   cmsg.CODEREQ = (res & 0x001F); // On mask avec 111110000..
   cmsg.ID = (res & 0xFFE0) >> 5;
   // + vérifier que ID dépasse pas 11bits ?
-  // printf("CODEREQ: %d ID: %d\n", cmsg.CODEREQ, cmsg.ID);
   if(cmsg.CODEREQ > 6) {
     return send_error(sockclient, "CODEREQ too large");
   }
@@ -994,18 +1018,16 @@ int recv_client_msg(int sockclient) {
     }
   }
     
-  // printf("**Client notification**: CODEREQ: %d ID: %d NUMFIL: %d :  NB: %d DATALEN: %d, DATA: %s\n", cmsg.CODEREQ, cmsg.ID, cmsg.NUMFIL, cmsg.NB, cmsg.DATALEN, cmsg.DATA);
 
   return validate_and_exec_msg(sockclient, &cmsg);
 }
 
 int broadcast(char * filpath, int port, int numfil) {
   int sock;
-  int nb_msg = 1; // tmp
 
   if((sock = socket(AF_INET6, SOCK_DGRAM, 0)) < 0) {
     perror("erreur socket");
-    return 1;
+    return -1;
   }
 
   struct sockaddr_in6 grsock;
@@ -1016,24 +1038,28 @@ int broadcast(char * filpath, int port, int numfil) {
   inet_pton(AF_INET6, multicast_address, &grsock.sin6_addr);
   grsock.sin6_port = htons(port);
 
-  int ifindex = if_nametoindex("enp4s0"); // TODO: Change this (I know it's for testing)
+  int ifindex = 0;
   
   if(setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_IF, &ifindex, sizeof(ifindex))) {
     perror("Error initializing the local interface.");
     return 1;
   }
 
-  // char buf[150];
-  // sprintf(buf, "NUMFIL %d says: Bonjour!", numfil);
-  // Here I can use get_last_messages for the same fil
-  // and for each message sent over to client (adapt message for notification)
-  // maybe use/adapt send_msg_ticket
+  char buf[50];
+  int nb_msg;
+  sprintf(buf, "fil%d/fil%d.info", numfil, numfil);
+  FILE *file = fopen(buf, "r");
+  if (file == NULL) {
+      nb_msg = 1;
+  }else {
+    if (fscanf(file, "%d", &nb_msg) != 1) nb_msg = 1;
+  }
+  fclose(file);
   message* messages = malloc(sizeof(message) * nb_msg);
   if(messages == NULL) {
     // send error
     return -1;
   }
-
   if(get_last_messages(nb_msg, numfil, messages) != 0) {
     goto cleanup;
   }
@@ -1043,8 +1069,8 @@ int broadcast(char * filpath, int port, int numfil) {
   msg.ID = 0;
   msg.NUMFIL = numfil;
   for(int j=0;j<nb_msg;j++) {
+    memset(msg.DATA, '\0', sizeof(msg.DATA));
     strncpy(msg.DATA, messages[j].text, 20);
-    msg.DATA[20] = '\0';
     strncpy(msg.PSEUDO, messages[j].pseudo, 10);
     msg.PSEUDO[10] = '\0';
     notification_query(sock, &msg, grsock);
@@ -1059,36 +1085,62 @@ int broadcast(char * filpath, int port, int numfil) {
     return 0;
 }
 
-void * multicast_thread(void * arg) {
-  // int port = *((int *)arg); tmp
-  int port = 4321;
-  int sleep_value = 2;
-  while(1) {
-    int nb = nb_fils();
-    for(int i=0; i<nb; i++) {
-      char * filepath = malloc(150);
-      sprintf(filepath, "fil%d/fil%d.txt", i+1, i+1);
-      // printf("Filepath: %s\n",filepath);
-      broadcast(filepath, port, i+1);
-      free(filepath);
-      sleep(sleep_value);
+#include <pthread.h>
+
+void * update_thread(void * arg) {
+    int sleep_value = 60;
+    while(1) {
+        sleep(sleep_value);
+        int nb = nb_fils();
+        char info[50];
+        for(int i=1; i<=nb; i++) {
+            memset(info, 0, 50);
+            sprintf(info, "fil%d/fil%d.info", i, i);
+            updateFileInfo(info, 1);
+        }
     }
-  }
+    return NULL;
 }
+
+void * multicast_thread(void * arg) {
+    pthread_t tid;
+    if (pthread_create(&tid, NULL, &update_thread, NULL) != 0) {
+        perror("Failed to create thread");
+        return NULL;
+    }
+
+    // Broadcast loop
+    while(1) {
+        int nb = nb_fils();
+        for(int i=1; i<=nb; i++) {
+            char * filepath = malloc(150);
+            sprintf(filepath, "fil%d/fil%d.txt", i, i);
+            broadcast(filepath, NOTIFICATION_UDP_PORT, i);
+            free(filepath);
+            
+        }
+        sleep(10);
+    }
+
+    pthread_join(tid, NULL);
+
+    return NULL;
+}
+
 
 
 int main(int argc, char** args) {
 
-  if(argc < 3) {
-    fprintf(stderr, "Usage: %s <port> <multicast port>\n", args[0]);
-    return 1;
+  if (argc < 2) {
+    fprintf(stderr, "Usage: %s <port>\n", args[0]);
+    exit(1);
   }
 
   // Multicast feature running in a different thread
   pthread_t multicast_tid;
-  int* mcport = malloc(sizeof(int));
-  *mcport = atoi(args[2]);
-  if(pthread_create(&multicast_tid, NULL, multicast_thread, mcport) < 0) {
+  int * mcport = malloc(sizeof(int));
+  // *mcport = NOTIFICATION_UDP_PORT;
+  if(pthread_create(&multicast_tid, NULL, multicast_thread, NULL) < 0) {
     perror("pthread_create failed");
     return 1;
   }
