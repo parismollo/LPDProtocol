@@ -20,6 +20,8 @@
 
 #define DEFAULT_UDP_PORT 33333
 #define NOTIFICATION_UDP_PORT 4321
+#define DATABASE "server_users.data"
+#define INFOS "infos.data"
 
 /* STRUCTURES */
 
@@ -75,6 +77,20 @@ int query_client(int sock, client_msg* msg);
 int query_server(int sock, client_msg* msg);
 void help_client();
 char* get_file_name(char* path);
+void goto_last_line(int fd);
+
+// fil.c
+int total_msg_fils(uint8_t nb_msg_by_fil);
+int nb_msg_fil(int fil);
+int get_fil_initiator(int fil, char* initiator, size_t buf_size);
+int is_user_registered(int id);
+int change_infos(char* key, char* new_value);
+int get_last_messages(int nb, int fil, message* messages);
+int get_pseudo(int id, char* pseudo, size_t pseudo_size);
+int increase_nb_fils();
+int nb_fils();
+int get_infos(char* key, char* value, size_t val_size);
+int readline(int fd, char* line, size_t buf_size);
 
 // Send/Download file
 void insert_packet_sorted(Node** head, FilePacket packet);

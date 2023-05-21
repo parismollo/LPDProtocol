@@ -1,11 +1,31 @@
 #include "megaphone.h"
 
+/* Ce fichier contient diverses fonctions utilisées par
+   le client et le serveur */
+
 // Vérifie si pre est bien préfix de str
 int prefix(char* str, char* pre) {
     return strncmp(pre, str, strlen(pre)) == 0;
 }
 
-void clear_pseudo(char * pseudo){
+// Deplace le descripteur de fichier au debut de la derniere ligne
+void goto_last_line(int fd) {
+  if(fd < 0)
+    return;
+  lseek(fd, 0, SEEK_END);
+  lseek(fd, -1, SEEK_CUR);
+  char c;
+  // on lit le fichier jusqu'au \n ou sinon jusqu'au debut du fichier
+  while (lseek(fd, 0, SEEK_CUR) > 0) {
+      read(fd, &c, sizeof(char));
+      if (c == '\n')
+          break;
+      lseek(fd, -2, SEEK_CUR);
+  }
+}
+
+// Efface les '#' dans le pseudo
+void clear_pseudo(char* pseudo){
     char* pos_hstg = strchr(pseudo, '#');
     if(pos_hstg == NULL)
       return;
@@ -25,6 +45,26 @@ void replace_after(char* str, char target, char replace_char, size_t maxsize) {
   str[maxsize-1] = '\0';
 }
 
+// Lit une ligne sans prendre le '\n'
+int readline(int fd, char* line, size_t buf_size) {
+  char c;
+  int n;
+  memset(line, 0, buf_size);
+  for(int i=0;i<buf_size;i++) {
+    if((n = read(fd, &c, 1)) < 0){
+      perror("read in readline");
+      close(fd);
+      return 1;
+    }
+    else if(n == 0) // EOF -> End Of File
+      return 0;
+      
+    if(c == '\n')
+      return 0;
+    line[i] = c;
+  }
+  return 2; // Ligne trop grande
+}
 
 ////////////////////////////////////
 // TELECHARGEMENT/ENVOIE FICHIERS //
