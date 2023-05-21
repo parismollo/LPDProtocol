@@ -39,7 +39,6 @@ paris@paris-pc:~/Documents/UniversiteParis/L3S6/PR6/megaphone_pr6$
   - [x] DATA contient les 20 premiers caractères du texte (le texte complété par des caractères nuls (’\0’) s’il fait moins de 20 caractères).
 **Daniel**:
 
-[ ] Améliorer la structure du code (+ diagramme)
 
 ## Done
 
