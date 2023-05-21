@@ -1,13 +1,13 @@
 # Projet de Messagerie : Utilisation de Fichiers pour Implémenter des Fils de Discussion
 
 ## Introduction
-Dans le cadre de notre projet de messagerie, nous avons opté pour une approche originale en implémentant les fils de discussion comme des fichiers. Chaque fil est matérialisé par un dossier distinct, qui comprend un fichier texte pour le stockage des messages et des fichiers supplémentaires pour la gestion du multicast.
+Dans le cadre de notre projet, nous avons opté pour une approche originale en implémentant les fils de discussion comme des fichiers. Chaque fil est matérialisé par un dossier distinct, qui comprend un fichier texte pour le stockage des messages et des fichiers supplémentaires pour la gestion du multicast.
 
 ## Organisation des Fichiers pour la Gestion des Données
 Le stockage des données nécessaires à notre projet s'appuie sur plusieurs fichiers :
 
-- `CLIENT_ID_FILE` (client_id.data) : Ce fichier renferme l'ID du client actuel, qui sert à l'identification unique de chaque client. L'ID est conservé dans ce fichier pour une utilisation ultérieure.
-- `DATABASE` (server_users.data) : Ce fichier est consacré à la sauvegarde des informations relatives aux utilisateurs du serveur. Il contient des détails tels que les noms d'utilisateur, les mots de passe et autres données importantes pour la gestion des utilisateurs.
+- `CLIENT_ID_FILE` (client_id.data) : Ce fichier contient l'ID du client actuel. L'ID est conservé dans ce fichier pour une utilisation ultérieure.
+- `DATABASE` (server_users.data) : Ce fichier est consacré à la sauvegarde des informations relatives aux utilisateurs du serveur. Il contient le nom de tous les utilisateurs.
 - `INFOS` (infos.data) : Ce fichier comprend des informations générales concernant le serveur, telles que le nombre total de fils de discussion créés jusqu'à présent.
 
 ## Gestion des Fils de Discussion et du Multicast
