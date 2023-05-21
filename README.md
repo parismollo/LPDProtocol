@@ -1,18 +1,29 @@
 # megaphone_pr6
 
-Résumé du projet :
-Le projet consiste à mettre en place un protocole de communication client/serveur appelé Mégaphone. Les utilisateurs peuvent se connecter au serveur via un client, participer à des fils de discussion, poster des messages et fichiers, s'abonner à des fils et recevoir des notifications.
+## Résumé du projet
+Le projet megaphone consiste à mettre en place un protocole de communication client/serveur appelé Mégaphone. Les utilisateurs peuvent se connecter au serveur via un client, participer à des fils de discussion, poster des messages et fichiers, s'abonner à des fils et recevoir des notifications.
 
-Pour lancer le projet :
+## Lancer le projet
+Vous devez construire le projet, puis lancer le serveur et un (ou plusieurs) clients à l'aide des commandes suivantes :
+```bash
+make
 
-Exécutez la commande "make" dans le répertoire contenant le fichier Makefile pour compiler les fichiers source du client et du serveur.
-Une fois la compilation terminée, vous obtiendrez les exécutables "client" et "server".
-Lancez le serveur en exécutant la commande "./server" dans votre terminal.
-Lancez un ou plusieurs clients en exécutant la commande "./client" dans des terminaux séparés.
+# Lancer le serveur
+./server           # le serveur se lance sur le port 7777
+./server 3333      # Ici, sur le port 3333
 
+# Lancer le client
+./client           # IP: '::1', port: 7777
+./client 4444      # IP: '::1', port: 4444
+./client "fdc7:9dd5:2c66:be86:4849:43ff:fe49:79be" 3333
+```
 
-Pour réinitialiser la base de données :
-Utilisez la commande "make reset_database" pour supprimer les fichiers de données de la base de données.
+## Réinitialiser la base de données
+```bash
+make reset_database
+```
 
-Pour nettoyer les fichiers objets et exécutables :
-Utilisez la commande "make clean" pour supprimer les fichiers objets et les exécutables du client et du serveur.
+## Nettoyer les fichiers objets et exécutables
+```bash
+make clean
+```
