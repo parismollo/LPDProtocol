@@ -7,6 +7,8 @@
 
 // Permet de stocker l'adresse du dernier client connecté
 struct sockaddr_in6 CLIENT_ADDR;
+pthread_mutex_t file_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 
 void print_connexion(struct sockaddr_in6 adrclient){
   char adr_buf[INET6_ADDRSTRLEN];
@@ -1047,6 +1049,7 @@ int broadcast(int port, int numfil) {
   char buf[50];
   int nb_msg;
   sprintf(buf, "fil%d/fil%d.info", numfil, numfil);
+  pthread_mutex_lock(&file_mutex);  // lock mutex
   FILE *file = fopen(buf, "r");
   if (file == NULL) {
       nb_msg = 1;
@@ -1054,6 +1057,7 @@ int broadcast(int port, int numfil) {
     if (fscanf(file, "%d", &nb_msg) != 1) nb_msg = 1;
   }
   fclose(file);
+  pthread_mutex_unlock(&file_mutex);
   message* messages = malloc(sizeof(message) * nb_msg);
   if(messages == NULL) {
     // send error
@@ -1093,7 +1097,9 @@ void * update_thread(void * arg) {
         for(int i=1; i<=nb; i++) {
             memset(info, 0, 50);
             sprintf(info, "fil%d/fil%d.info", i, i);
+            pthread_mutex_lock(&file_mutex);
             updateFileInfo(info, 1);
+            pthread_mutex_unlock(&file_mutex);
         }
     }
     return NULL;
@@ -1108,11 +1114,11 @@ void * multicast_thread(void * arg) {
 
     // Broadcast loop
     while(1) {
-        int nb = nb_fils();
-        for(int i=1; i<=nb; i++) {
-            broadcast(NOTIFICATION_UDP_PORT, i);
-        }
-        sleep(10);
+      int nb = nb_fils();
+      for(int i=1; i<=nb; i++) {
+          broadcast(NOTIFICATION_UDP_PORT, i);
+      }
+      sleep(10);
     }
 
     pthread_join(tid, NULL);
