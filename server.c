@@ -631,7 +631,6 @@ int validate_and_exec_msg(int socket, client_msg* msg) {
   return -1;
 }
 
-
 int recv_client_msg(int sockclient) {
   if (sockclient < 0)
     return 1;
@@ -651,12 +650,12 @@ int recv_client_msg(int sockclient) {
   cmsg.CODEREQ = (res & 0x001F); // On mask avec 111110000..
   cmsg.ID = (res & 0xFFE0) >> 5;
   // + vérifier que ID dépasse pas 11bits ?
-  // if(cmsg.CODEREQ > 6) {
-  //   return send_error(sockclient, "CODEREQ too large");
-  // }
-  // else if(cmsg.CODEREQ == 1) { // INSCRIPTION
-  //   return recv_client_subscription(sockclient, &cmsg);
-  // }
+  if(cmsg.CODEREQ > 6) {
+    return send_error(sockclient, "CODEREQ too large");
+  }
+  else if(cmsg.CODEREQ == 1) { // INSCRIPTION
+    return recv_client_subscription(sockclient, &cmsg);
+  }
   recu = recv(sockclient, &res, sizeof(uint16_t), 0);
   if (recu < 0) {
     perror("erreur lecture");
