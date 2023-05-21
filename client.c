@@ -601,11 +601,20 @@ void extractNumbers(char** addresses, int* output, int size) {
 
 int cli(int sock) {
   printf("Megaphone says: Hi user! What do you want to do?\n");
-  printf("(1) Subscription\n(2) Post ticket\n(3) Get tickets\n(4) Subscribe to fil\n(5) Send file\n(6) Download file\n(7) Close connection\n");
+
+  if(!check_subscription()){
+    printf("(1) Subscription\n");
+  }else{
+    printf("(2) Post ticket\n(3) Get tickets\n(4) Subscribe to fil\n(5) Send file\n(6) Download file\n(7) Close connection\n");
+  }
   int num, numfil;
   scanf("%d", &num);
   char filename[255];
   memset(filename, 0, 255);
+  if(num > 1 && num < 7 && !check_subscription()){
+      printf("Please subscribe to megaphone (code : 1)\n");
+      scanf("%d", &num);
+  }
   switch (num)
   {
   case 1:
