@@ -29,10 +29,8 @@ paris@paris-pc:~/Documents/UniversiteParis/L3S6/PR6/megaphone_pr6$
 **Leopold**:
 - [x] send_file (client): fonction pour envoyer un fichier à un fil au serveur **CLIENT**
 - [x] recv_file (SERVEUR): fonction pour récupérer un fichier envoyer par le client puis le stocker correspondant au fil sur le server **SERVEUR**
-- [ ] le serveur ne doit pas attendre indéfiniment le transfert. S’il ne reçoit rien après quelques secondes, il termine son attente et le transfert est annulé. **SERVEUR**
-- [ ] Port UDP ? Verifier que ce port n'est pas deja utilisé ailleurs ?
-- [ ] IPV6 pour UDP ? Mais on verifie pas si le client est IPV4 ?
-- [ ] Attention. Au moment du stockage il faut recuperer le nom du fichier pas le chemin absolu. Par exemple avec fil6/file6.txt vers fil5 ca crash
+- [x] le serveur ne doit pas attendre indéfiniment le transfert. S’il ne reçoit rien après quelques secondes, il termine son attente et le transfert est annulé. **SERVEUR**
+- [x] Attention. Au moment du stockage il faut recuperer le nom du fichier pas le chemin absolu. Par exemple avec fil6/file6.txt vers fil5 ca crash
 
 **Paris**:
 - [x] Notification feature. 

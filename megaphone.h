@@ -21,11 +21,15 @@
 #define DEFAULT_UDP_PORT 33333
 #define NOTIFICATION_UDP_PORT 4321
 
-// STRUCTURES
+/* STRUCTURES */
+
+// Permet de stocker le message d'un client ou parfois du serveur
 typedef struct {
   u_int8_t CODEREQ, DATALEN;
   uint16_t NUMFIL, NB, ID;
-  char DATA[256]; // DATALEN codé sur 1 octet. Donc DATA -> taille 255 max + 1 (pour '\0')
+  // DATALEN codé sur 1 octet. Donc DATA -> taille 255 max + 1 (pour '\0')
+  // Pär contre, quand on fait un send on envoie seulement -> 255 max
+  char DATA[256];
   uint8_t multicast_addr[16];
 } client_msg;
 
@@ -36,18 +40,21 @@ typedef struct {
   char DATA[21];
 } notification;
 
+// Utilisé pour stocker les infos pour un message à mettre dans un fil
 typedef struct {
   int ID;
   char pseudo[11];
   char text[256];
 } message;
 
+// Utilisé pour échanger des fichiers client/serveur
 typedef struct {
   uint16_t codreq_id;
   uint16_t num_bloc;
   char data[512];
 } FilePacket;
 
+// Utilisé pour trier les packets qu'on a reçu en UDP dans le bonne ordre
 typedef struct Node {
   FilePacket packet;
   struct Node* next;
@@ -66,6 +73,8 @@ int prefix(char* str, char* pre);
 void print_error(char * message);
 int query_client(int sock, client_msg* msg);
 int query_server(int sock, client_msg* msg);
+void help_client();
+char* get_file_name(char* path);
 
 // Send/Download file
 void insert_packet_sorted(Node** head, FilePacket packet);

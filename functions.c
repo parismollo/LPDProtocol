@@ -131,7 +131,6 @@ int send_file(struct sockaddr_in6 addr, client_msg msg, char* file_path) {
   return 0;
 }
 
-
 // Permet de recevoir un fichier en UDP
 Node* download_file(int UDP_port, int ID, int CODREQ) {
   int sock_udp = socket(PF_INET6, SOCK_DGRAM, 0);
@@ -251,4 +250,23 @@ Node* download_file(int UDP_port, int ID, int CODREQ) {
 
 void print_error(char * message) {
   fprintf(stderr, "\033[32m[Server Log]:\033[0m \033[31m%s\n\033[0m", message);
+}
+
+// Permet de récupérer le nom d'un fichier (avec son extension) depuis son path
+char* get_file_name(char* path) {
+    char* fileName = strrchr(path, '/');
+    if (fileName == NULL)
+        return path;
+    return ++fileName;
+}
+
+void help_client() {
+    printf("Utilisation : ./client [IP] [PORT]\n");
+    printf("Exemples :\n");
+      printf("  ./client\n");
+    printf("    Se connecter à l'adresse IP par défaut '::1' (localhost) sur le port par défaut '7777'\n");
+    printf("  ./client 4421\n");
+    printf("    Se connecter à l'adresse IP par défaut '::1' (localhost) sur le port '4421'\n");
+    printf("  ./client 12:31:12:4:1::12:99 3333\n");
+    printf("    Se connecter à l'adresse IP '12:31:12:4:1::12:99' sur le port '3333'\n");
 }

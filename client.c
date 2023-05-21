@@ -4,14 +4,16 @@
 // #define IP_SERVER "fdc7:9dd5:2c66:be86:4849:43ff:fe49:79bf" // IP LULU
 // #define IP_SERVER "192.168.70.237" // IPV4 LAMPE
 // #define IP_SERVER "fdc7:9dd5:2c66:be86:4849:43ff:fe49:79be" // IPV6 LAMPE
-#define IP_SERVER "::1"
-#define PORT 7776
+
+char IP_SERVER[128] = "::1";
+int PORT = 7777;
+
 #define CLIENT_ID_FILE "client_id.data"
 #define CLIENT_MCADDRESS "address.data"
 
 int ID = 0; // ID zero is not valid, valid id has to be > 0.
 
-// permet de vérifier si le client est déjà abonné au service. 
+// Permet de vérifier si le client est déjà abonné au service. 
 // Elle lit l'ID du client à partir d'un fichier et renvoie 1 si l'ID est valide (supérieur à 0) ou 0 sinon.
 int check_subscription() {
     char buffer[SIZE_MESS];
@@ -37,6 +39,7 @@ int check_subscription() {
     return 1;
 }
 
+// Permet d'afficher un message d'erreur et de fermer le socket
 int send_error(int sock, char* msg) {
     if(errno)
       perror(msg);
@@ -49,9 +52,12 @@ int send_error(int sock, char* msg) {
     return -1;
 }
 
-int server_notification_post(int sockclient, client_msg* cmsg) {
+// Permet de recevoir la reponse du serveur après l'ajout d'un message sur un fil
+int server_notification_post(int sockclient) {
   if (sockclient < 0)
     return 1;
+  client_msg cmsg;
+
   uint16_t res;
   int recu = recv(sockclient, &res, sizeof(uint16_t), 0);
   if (recu <= 0){
@@ -60,38 +66,27 @@ int server_notification_post(int sockclient, client_msg* cmsg) {
   }
 
   res = ntohs(res);
-  cmsg->CODEREQ = (res & 0x001F); // On mask avec 111110000..
-  if (cmsg->CODEREQ == 31) return 1;
-  cmsg->ID = (res & 0xFFE0) >> 5;
+  cmsg.CODEREQ = (res & 0x001F); // On mask avec 111110000..
+  if (cmsg.CODEREQ == 31) return 1;
+  cmsg.ID = (res & 0xFFE0) >> 5;
   recu = recv(sockclient, &res, sizeof(uint16_t), 0);
   
   if (recu <= 0){
     perror("erreur lecture notif post");
     return 1;
   }
-  cmsg->NUMFIL = ntohs(res);
+  cmsg.NUMFIL = ntohs(res);
   recu = recv(sockclient, &res, sizeof(uint16_t), 0);
   
   if (recu <= 0){
     return send_error(sockclient, "error recv");
   }
   
-  cmsg->NB = ntohs(res);
-  recu = recv(sockclient, &res, sizeof(uint8_t), 0);
-  
-//   if (recu <= 0){ No data here for server notification
-//     return send_error(sockclient, "xerror recv");
-//   }
-  
-  cmsg->DATALEN = res;
-  memset(cmsg->DATA, 0, 256);
-  
-  recu = recv(sockclient, cmsg->DATA, cmsg->DATALEN, 0);
-  if (recu != cmsg->DATALEN) {
-    return send_error(sockclient, "error DATALEN");
-  }
+  cmsg.NB = ntohs(res);
 
-  printf("\033[32m[Server response]\033[0m: CODEREQ: %d ID: %d NUMFIL: %d DATA: %s\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->DATA);
+  // Pas besoin de recevoir DATALEN ni DATA ici
+
+  printf("\033[32m[Server response]\033[0m: CODEREQ: %d ID: %d NUMFIL: %d\n", cmsg.CODEREQ, cmsg.ID, cmsg.NUMFIL);
 
   return 0;
 }
@@ -108,12 +103,12 @@ int send_ticket(int sock, int numfil, char* text) {
     msg.DATALEN = strlen(text);
     memset(msg.DATA, 0, 256);
     strncpy(msg.DATA, text, strlen(text));
-    if (query_server(sock, &msg) == 0) {
-        client_msg msg; //TODO : pourquoi ?
-        return server_notification_post(sock, &msg);
-    }
+    if (query_server(sock, &msg) == 0)
+        return server_notification_post(sock);
     return 1;
 }
+
+/* Les fonctions suivantes permettent d'envoyer des requetes au serveur */
 
 int query_server(int sock, client_msg* msg) {
     // printf("id: %d, codreq: %d\n", msg->ID, msg->CODEREQ);
@@ -203,7 +198,8 @@ int query_subscription(int sock, char* pseudo) {
     return 0;
 }
 
-
+// Permet de recevoir le message d'un utilisateur sur un certain fil
+// Cette fonction effectue des recv et affiche le message reçu du serveur
 int process_ticket(int sock) {
   
   // read numfil
@@ -232,19 +228,14 @@ int process_ticket(int sock) {
   
   if(len > 0) {
     // read data
-    char *data = malloc(len+1);
-    if (data == NULL) {
-      return send_error(sock, "malloc failed5");
-    }
-    memset(data, 0, len+1);
+    char data[256];
+    memset(data, 0, 256);
     if(recv(sock, data, len, 0) <= 0) {
-      free(data);
       return send_error(sock, "recv failed6");
     }
     printf("\033[32m[Server response]\033[0m: NUMFIL: %hu ORIGIN: %s PSEUDO: %s DATALEN: %d DATA: %s\n", numfil, origine, pseudo, len, data);
-    free(data);
   }
-  else {
+  else { // Au cas où il y aurait un message de taille 0 sur le serveur (ce qui n'est pas sensé arriver ?)
     printf("\033[32m[Server response]\033[0m: NUMFIL: %hu ORIGIN: %s PSEUDO: %s, DATALEN: %d\n", numfil, origine, pseudo, len);
   }
 
@@ -301,9 +292,10 @@ int save_mcaddress(char * address) {
   return 0;
 }
 
-int server_notification_subscription(int sock, client_msg * cmsg) {
+int server_notification_subscription(int sock) {
   if (sock < 0)
     return 1;
+  client_msg cmsg;
   uint16_t res;
   int recu = recv(sock, &res, sizeof(uint16_t), 0);
   if (recu <= 0){
@@ -312,25 +304,22 @@ int server_notification_subscription(int sock, client_msg * cmsg) {
   }
 
   res = ntohs(res);
-  cmsg->CODEREQ = (res & 0x001F); // On mask avec 111110000..
-  if(cmsg->CODEREQ == 31) return 1; 
-  cmsg->ID = (res & 0xFFE0) >> 5;
+  cmsg.CODEREQ = (res & 0x001F); // On mask avec 111110000..
+  if(cmsg.CODEREQ == 31) return 1; 
+  cmsg.ID = (res & 0xFFE0) >> 5;
   recu = recv(sock, &res, sizeof(uint16_t), 0);
   
   if (recu <= 0){
     perror("erreur lecture notif abonnement");
     return 1;
   }
-  cmsg->NUMFIL = ntohs(res);
+  cmsg.NUMFIL = ntohs(res);
   recu = recv(sock, &res, sizeof(uint16_t), 0);
   
   if (recu <= 0){
     return send_error(sock, "error recv");
   }
-  cmsg->NB = ntohs(res);
-
-  recu = recv(sock, &res, sizeof(uint8_t), 0);
-  cmsg->DATALEN = res;
+  cmsg.NB = ntohs(res);
 
   uint8_t addrmult[16]; // Use an array of 16 bytes for the binary multicast address
   if (recv(sock, addrmult, sizeof(addrmult), 0) < 0) {
@@ -343,7 +332,7 @@ int server_notification_subscription(int sock, client_msg * cmsg) {
     perror("failed to save multicast address");
     return 1;
   }
-  printf("\033[32m[Server response]\033[0m: CODEREQ: %d ID: %d NUMFIL: %d  NB: %d ADDRM: %s\n", cmsg->CODEREQ, cmsg->ID, cmsg->NUMFIL, cmsg->NB, addrmult_str);
+  printf("\033[32m[Server response]\033[0m: CODEREQ: %d ID: %d NUMFIL: %d  NB: %d ADDRM: %s\n", cmsg.CODEREQ, cmsg.ID, cmsg.NUMFIL, cmsg.NB, addrmult_str);
   return 0;
 }
 
@@ -394,8 +383,7 @@ int subscribe_to_fil(int sock, int num_fil) {
   msg.DATALEN = 0;
   memset(msg.DATA, 0, 256);
   if (query_server(sock, &msg) == 0) {
-    client_msg msg;
-    return server_notification_subscription(sock, &msg);
+    return server_notification_subscription(sock);
   }
   return 1;
 }
@@ -494,9 +482,14 @@ int send_file_to_server(int sock, int num_fil, char* file_path) {
   msg.ID = ID;
   msg.NUMFIL = num_fil;
   msg.NB = 0;
-  msg.DATALEN = strlen(file_path);
+
+  // On récupère le nom du fichier (sans '/')
+  char* file_name = get_file_name(file_path);
+  msg.DATALEN = strlen(file_name);
   memset(msg.DATA, 0, 256);
-  strncpy(msg.DATA, file_path, msg.DATALEN);
+  strncpy(msg.DATA, file_name, msg.DATALEN);
+
+  printf("filename: %s\n", file_name);
 
   if (query_server(sock, &msg) != 0)
     return send_error(sock, "Error send query\n");
@@ -525,6 +518,7 @@ int send_file_to_server(int sock, int num_fil, char* file_path) {
 
   printf("PORT UDP: %d\n", UDP_port);
 
+  // On met le vrai PATH du fichier cette fois: file_path
   if(send_file(servadr, s_msg, file_path) < 0) {
     fprintf(stderr, "error send file with UDP\n");
     return -1;
@@ -585,7 +579,7 @@ int download_server_file(int sock, int num_fil, int UDP_port, char* filename) {
   return 0;
 }
 
-void extractNumbers(char *addresses[], int output[], int size) {
+void extractNumbers(char** addresses, int* output, int size) {
   int i;
   for (i = 0; i < size; i++) {
     char *start = strstr(addresses[i], "::");
@@ -672,7 +666,7 @@ int cli(int sock) {
 
 void * multicast_receiver(void * arg) {
   while(1) {
-    int max = 10; // tmp
+    int max = 128; // tmp
     char ** addresses = malloc(sizeof(char *) * max);
     FILE * file = fopen(CLIENT_MCADDRESS, "r");
 
@@ -772,8 +766,39 @@ void * multicast_receiver(void * arg) {
   }
 }
 
+
+
 int main(int argc, char* argv[]) {
-  
+  // IP et PORT : variables globales
+  // Par défaut, IP = "::1" et PORT = 7777
+  switch (argc) {
+    case 1:
+      // Aucun argument passé, on garde "::1" et 7777
+      break;
+    case 2:
+      if(strcmp(argv[1], "--help") == 0) {
+        help_client();
+        return 0;
+      }
+      // Un argument passé, considéré comme le port.
+      // On garde "::1" comme IP
+      PORT = atoi(argv[1]);
+      break;
+    case 3:
+      // Deux arguments passés, le premier est l'adresse IP et le second est le port
+      memset(IP_SERVER, 0, sizeof(IP_SERVER));
+      strncpy(IP_SERVER, argv[1], sizeof(IP_SERVER) - 1);
+      PORT = atoi(argv[2]);
+      break;
+    default:
+      // Sinon, il y a un probleme
+      help_client();
+      return 1;
+  }
+
+  // Utilisation des valeurs récupérées
+  printf("Connexion au serveur (IP: %s , port: %d)\n", IP_SERVER, PORT);
+
   pthread_t tid;
   int thread_started = 0;
   if (access(CLIENT_MCADDRESS, F_OK) != -1) {
@@ -788,14 +813,18 @@ int main(int argc, char* argv[]) {
   adrso.sin6_port = htons(PORT); // Convertir le port en big-endian
   
   inet_pton(AF_INET6, IP_SERVER, &adrso.sin6_addr); // On écrit l'ip dans adrso.sin_addr
-  if (connect(sock, (struct sockaddr *) &adrso, sizeof(adrso)) < 0) send_error(sock, "connect failed"); // 0 en cas de succès, -1 sinon  
-  // int loop = 1;
-  // while (loop != -1) {
+  if (connect(sock, (struct sockaddr *) &adrso, sizeof(adrso)) < 0) {
+    close(sock);
+    return send_error(sock, "connection failed"); // 0 en cas de succès, -1 sinon
+  }
+
   cli(sock);
-  // }
+
   close(sock);
+
   if (thread_started) {
     pthread_join(tid, NULL); // Wait for the thread to finish
   }
+
   return EXIT_SUCCESS;
 }

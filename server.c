@@ -218,15 +218,14 @@ void updateFileInfo(char *filepath, int reset) {
 int notify_ticket_reception(int sock, u_int8_t CODEREQ, uint8_t ID, int NUMFIL) {
   // Once ticket created successfully
   // notify client
-  char* ticket_created = "Ticket created";
   client_msg notification;
   memset(&notification, 0, sizeof(notification));
   notification.CODEREQ = CODEREQ;
   notification.ID = ID;
   notification.NUMFIL = NUMFIL;
   notification.NB = 0;
-  strncpy(notification.DATA, ticket_created, strlen(ticket_created));
-  notification.DATALEN = strlen(notification.DATA);
+  notification.DATALEN = 0;
+  memset(notification.DATA, 0, 255);
 
   return query_client(sock, &notification);
 }
@@ -1022,7 +1021,7 @@ int recv_client_msg(int sockclient) {
   return validate_and_exec_msg(sockclient, &cmsg);
 }
 
-int broadcast(char * filpath, int port, int numfil) {
+int broadcast(int port, int numfil) {
   int sock;
 
   if((sock = socket(AF_INET6, SOCK_DGRAM, 0)) < 0) {
@@ -1085,8 +1084,6 @@ int broadcast(char * filpath, int port, int numfil) {
     return 0;
 }
 
-#include <pthread.h>
-
 void * update_thread(void * arg) {
     int sleep_value = 60;
     while(1) {
@@ -1113,11 +1110,7 @@ void * multicast_thread(void * arg) {
     while(1) {
         int nb = nb_fils();
         for(int i=1; i<=nb; i++) {
-            char * filepath = malloc(150);
-            sprintf(filepath, "fil%d/fil%d.txt", i, i);
-            broadcast(filepath, NOTIFICATION_UDP_PORT, i);
-            free(filepath);
-            
+            broadcast(NOTIFICATION_UDP_PORT, i);
         }
         sleep(10);
     }
@@ -1130,11 +1123,18 @@ void * multicast_thread(void * arg) {
 
 
 int main(int argc, char** args) {
+  // Par défaut, le serveur tournera sur le port 7777
+  int port = 7777;
 
-  if (argc < 2) {
-    fprintf(stderr, "Usage: %s <port>\n", args[0]);
-    exit(1);
+  if(argc >= 2) {
+    if(strcmp(args[1], "--help") == 0) {
+      fprintf(stderr, "Usage: %s <port>\n", args[0]);
+      return 0;
+    }
+    port = atoi(args[1]);
   }
+
+  printf("Lancement du serveur megaphone sur le port %d\n", port);
 
   // Multicast feature running in a different thread
   pthread_t multicast_tid;
@@ -1156,7 +1156,7 @@ int main(int argc, char** args) {
   struct sockaddr_in6 address_sock;
   memset(&address_sock, 0, sizeof(address_sock));
   address_sock.sin6_family = AF_INET6;
-  address_sock.sin6_port = htons(atoi(args[1]));
+  address_sock.sin6_port = htons(port);
   address_sock.sin6_addr = in6addr_any;
 
   // Pour avoir une socket polymorphe : 
