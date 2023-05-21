@@ -823,7 +823,7 @@ int main(int argc, char* argv[]) {
   close(sock);
 
   if (thread_started) {
-    pthread_join(tid, NULL); // Wait for the thread to finish
+    // pthread_join(tid, NULL); // Wait for the thread to finish
   }
 
   return EXIT_SUCCESS;
