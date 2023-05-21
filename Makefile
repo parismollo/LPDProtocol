@@ -1,22 +1,29 @@
-define confirm
-	@read -p "Are you sure you want to run this command? [y/N] " answer; \
-	if [ "$$answer" != "y" -a "$$answer" != "Y" ]; then \
-			echo "Aborted."; exit 1; \
-	fi
-endef
+CC = gcc
+CFLAGS = -Wall -pthread
 
-all:
-	gcc -Wall -pthread client.c fil.c functions.c -o client
-	gcc -Wall -pthread server.c fil.c functions.c -o server
+# Fichiers sources pour le client et le serveur
+CLIENT_SRC = client.c fil.c functions.c
+SERVER_SRC = server.c fil.c functions.c
+
+# Fichiers objets pour le client et le serveur
+CLIENT_OBJ = $(CLIENT_SRC:.c=.o)
+SERVER_OBJ = $(SERVER_SRC:.c=.o)
+
+all: client server
+
+client: $(CLIENT_OBJ)
+	$(CC) $(CFLAGS) $^ -o $@
+
+server: $(SERVER_OBJ)
+	$(CC) $(CFLAGS) $^ -o $@
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -rf server
-	rm -rf client
+	rm -rf $(CLIENT_OBJ) $(SERVER_OBJ) client server
 
+# Règle pour réinitialiser la base de données
 reset_database:
 	$(call confirm)
-	rm -rf client_id.data
-	rm -rf server_users.data
-	rm -rf infos.data
-	rm -rf address.data
-	rm -rf fil[0-9]*
+	rm -rf client_id.data server_users.data infos.data address.data fil[0-9]*
