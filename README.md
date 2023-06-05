@@ -1,10 +1,10 @@
-# megaphone_pr6
+# LPDProtocol
 
-## Résumé du projet
-Le projet megaphone consiste à mettre en place un protocole de communication client/serveur appelé Mégaphone. Les utilisateurs peuvent se connecter au serveur via un client, participer à des fils de discussion, poster des messages et fichiers, s'abonner à des fils et recevoir des notifications.
+## Project Summary
+The LPDProtocol project aims to establish a client/server communication protocol called LPDProtocol. Users can connect to the server through a client, engage in discussions, post messages and files, subscribe to threads, and receive notifications.
 
-## Lancer le projet
-Vous devez construire le projet, puis lancer le serveur et un (ou plusieurs) clients à l'aide des commandes suivantes :
+## Getting Started
+To start the project, you need to build it and then launch the server and one (or multiple) clients using the following commands:
 ```bash
 make
 
